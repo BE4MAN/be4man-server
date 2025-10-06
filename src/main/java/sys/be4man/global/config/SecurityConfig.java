@@ -1,4 +1,4 @@
-package sys.be4man.global.config.security;
+package sys.be4man.global.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
