@@ -19,8 +19,7 @@ public class SecurityConfig {
             // 공개 목록
             .authorizeHttpRequests(auth -> auth
                     .requestMatchers(
-                        "/"
-                        , "/health"
+                        "/health"
 
                         // swagger
                         , "/v3/api-docs/**"
