@@ -9,6 +9,7 @@ import sys.be4man.global.exception.type.ExceptionType;
  */
 @Getter
 public abstract class BaseException extends RuntimeException {
+
     private final HttpStatus httpStatus;
 
     protected BaseException(final ExceptionType exceptionType, final HttpStatus httpStatus) {

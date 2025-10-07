@@ -7,5 +7,6 @@ import org.springframework.stereotype.Repository;
 @Repository
 @RequiredArgsConstructor
 public class AccountRepositoryImpl implements AccountRepositoryCustom {
+
     private final JPAQueryFactory queryFactory;
 }

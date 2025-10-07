@@ -8,6 +8,7 @@ import sys.be4man.global.exception.type.ExceptionType;
  * 409 CONFLICT 예외
  */
 public class ConflictException extends BaseException {
+
     public ConflictException(final ExceptionType exceptionType) {
         super(exceptionType, HttpStatus.CONFLICT);
     }
