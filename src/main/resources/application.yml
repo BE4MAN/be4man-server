@@ -15,6 +15,7 @@ spring:
     properties:
       hibernate:
         format_sql: true
+        default_schema: be4man_schema
         dialect: org.hibernate.dialect.PostgreSQLDialect
     open-in-view: false
 
