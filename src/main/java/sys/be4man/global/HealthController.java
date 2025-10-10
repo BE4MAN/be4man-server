@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/health")
 @Tag(name = "헬스 체크", description = "서버 상태 확인 API입니다.")
 public class HealthController {
+
     @Value("${server.port}")
     private String serverPort;
 

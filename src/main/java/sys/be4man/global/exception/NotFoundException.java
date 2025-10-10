@@ -8,6 +8,7 @@ import sys.be4man.global.exception.type.ExceptionType;
  * 404 NOT FOUND 예외
  */
 public class NotFoundException extends BaseException {
+
     public NotFoundException(final ExceptionType exceptionType) {
         super(exceptionType, HttpStatus.NOT_FOUND);
     }

@@ -48,7 +48,9 @@ public class GlobalExceptionHandler {
      */
     // 요청 검증 실패 예외 (@Valid 어노테이션 실패. @RequestBody)
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ProblemDetail handleMethodArgumentNotValidException(final MethodArgumentNotValidException e) {
+    public ProblemDetail handleMethodArgumentNotValidException(
+            final MethodArgumentNotValidException e
+    ) {
         final List<FieldError> errors = e.getBindingResult().getFieldErrors();
         log.warn("[{}] {}", e.getClass(), errors);
 
@@ -72,7 +74,9 @@ public class GlobalExceptionHandler {
 
     // 요청 파라미터 타입 변환 실패 (String을 Integer로 변환 실패 등)
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
-    public ProblemDetail handleMethodArgumentTypeMismatchException(final MethodArgumentTypeMismatchException e) {
+    public ProblemDetail handleMethodArgumentTypeMismatchException(
+            final MethodArgumentTypeMismatchException e
+    ) {
         log.warn("[{}] {}", e.getClass(), e.getMessage());
 
         return ProblemDetail.forStatusAndDetail(

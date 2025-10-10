@@ -8,6 +8,7 @@ import sys.be4man.global.exception.type.ExceptionType;
  * 401 UNAUTHORIZED 예외
  */
 public class UnauthorizedException extends BaseException {
+
     public UnauthorizedException(final ExceptionType exceptionType) {
         super(exceptionType, HttpStatus.UNAUTHORIZED);
     }

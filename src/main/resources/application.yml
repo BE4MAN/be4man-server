@@ -2,10 +2,14 @@ spring:
   application:
     name: be4man-server
 
+  # .env import
+  config:
+    import: optional:file:.env[.properties]
+
   datasource:
-    url: jdbc:postgresql://localhost:5432/be4man
-    username: be4man
-    password: password
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
 
   # JPA
@@ -15,7 +19,7 @@ spring:
     properties:
       hibernate:
         format_sql: true
-        default_schema: be4man_schema
+        default_schema: ${DB_SCHEMA}
         dialect: org.hibernate.dialect.PostgreSQLDialect
     open-in-view: false
 

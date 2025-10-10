@@ -10,6 +10,7 @@ import sys.be4man.global.exception.type.CommonExceptionType;
 @Component
 @RequiredArgsConstructor
 public class AccountChecker {
+
     private final AccountRepository accountRepository;
 
     public Account checkAccountExists(Long accountId) {
