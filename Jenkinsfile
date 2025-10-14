@@ -50,7 +50,11 @@ pipeline {
         stage('Deploy to VM') {
             steps {
                 script {
-                    // SSH Username with private key 타입 Credentials 사용을 위해 sshagent 사용
+                  withCredentials([string(credentialsId: 'db_password', variable: 'DB_PASSWORD'),
+                   string(credentialsId: 'db_url', variable: 'DB_URL'),
+                   string(credentialsId: 'db_username', variable: 'DB_USERNAME'),
+                   string(credentialsId: 'db_schema', variable: 'DB_SCHEMA')]
+                   ) {
                     sshagent(credentials: [env.VM_SSH_CRED_ID]) {
                         sh """
                             # Host Key 검사를 무시하고 SSH 접속 (-o StrictHostKeyChecking=no)
@@ -63,14 +67,19 @@ pipeline {
                                 # 2. Docker Hub에서 새 이미지 Pull
                                 docker pull ${env.DOCKER_IMAGE_NAME}:${env.BUILD_NUMBER}
 
-                                # 3. 새 컨테이너 실행
+                                # 3. 새 컨테이너 실행 (환경 변수 주입)
                                 docker run -d \\
-                                    --name be4man_app \\
-                                    -p 8080:8080 \\
-                                    ${env.DOCKER_IMAGE_NAME}:${env.BUILD_NUMBER}
+                                --name be4man_app \\
+                                -p 8080:8080 \\
+                                -e DB_URL="${DB_URL}" \\
+                                -e DB_USERNAME="${DB_USERNAME}" \\
+                                -e DB_PASSWORD="${DB_PASSWORD_SECRET}" \\
+                                -e DB_SCHEMA="${DB_SCHEMA}" \\
+                                ${env.DOCKER_IMAGE_NAME}:${env.BUILD_NUMBER}
                             '
                         """
                     }
+                  }
                 }
             }
         }
