@@ -73,7 +73,7 @@ pipeline {
                                 -p 8080:8080 \\
                                 -e DB_URL="${DB_URL}" \\
                                 -e DB_USERNAME="${DB_USERNAME}" \\
-                                -e DB_PASSWORD="${DB_PASSWORD_SECRET}" \\
+                                -e DB_PASSWORD="${DB_PASSWORD}" \\
                                 -e DB_SCHEMA="${DB_SCHEMA}" \\
                                 ${env.DOCKER_IMAGE_NAME}:${env.BUILD_NUMBER}
                             '
