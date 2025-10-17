@@ -1,4 +1,4 @@
-package sys.be4man.domains.deployment_log.model.entity;
+package sys.be4man.domains.deploymentlog.model.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -51,7 +51,7 @@ public class DeploymentLog extends BaseEntity {
 
     @Builder
     public DeploymentLog(Deployment deployment, String jenkinsJobName, String log,
-                         Integer duration, LocalDateTime startedAt, LocalDateTime endedAt) {
+            Integer duration, LocalDateTime startedAt, LocalDateTime endedAt) {
         this.deployment = deployment;
         this.jenkinsJobName = jenkinsJobName;
         this.log = log;
