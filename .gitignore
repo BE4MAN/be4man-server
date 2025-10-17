@@ -5,7 +5,6 @@
 .gradle
 build/
 **/build/
-!gradle-wrapper.jar
 !gradle-wrapper.properties
 # Gradle Patch
 *.hprof
