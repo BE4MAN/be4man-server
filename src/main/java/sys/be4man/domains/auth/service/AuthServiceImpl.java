@@ -85,7 +85,7 @@ public class AuthServiceImpl implements AuthService {
      * OAuth 임시 코드로 로그인 (기존 사용자)
      */
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public AuthResponse signin(String tempCode) {
         log.info("로그인 시도 - tempCode: {}", tempCode);
 
@@ -113,7 +113,7 @@ public class AuthServiceImpl implements AuthService {
      * Refresh Token으로 새로운 Access Token 및 Refresh Token 발급 (Rotation)
      */
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public AuthResponse refresh(String refreshToken) {
         log.info("토큰 갱신 시도");
 
