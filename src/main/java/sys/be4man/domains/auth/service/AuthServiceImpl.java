@@ -28,6 +28,7 @@ public class AuthServiceImpl implements AuthService {
     private final JwtProvider jwtProvider;
     private final RefreshTokenRedisService refreshTokenRedisService;
     private final SignTokenRedisService signTokenRedisService;
+    private final OAuthCodeRedisService oauthCodeRedisService;
 
     /**
      * SignToken을 사용하여 신규 계정 생성
@@ -72,42 +73,81 @@ public class AuthServiceImpl implements AuthService {
                 newAccount.getRole()
         );
 
-        refreshTokenRedisService.createAndSave(newAccount.getId());
+        String refreshToken = refreshTokenRedisService.createAndSave(newAccount.getId());
 
         log.info("회원가입 완료 - ID: {}, githubId: {}", newAccount.getId(), githubId);
 
-        return new AuthResponse(accessToken, "Bearer");
+        return new AuthResponse(accessToken, refreshToken);
     }
 
     /**
-     * Access Token으로 새로운 Access Token 발급
+     * OAuth 임시 코드로 로그인 (기존 사용자)
      */
     @Override
     @Transactional(readOnly = true)
-    public AuthResponse refresh(String accessToken) {
-        Long accountId;
-        try {
-            accountId = jwtProvider.getAccountIdFromToken(accessToken);
-        } catch (Exception e) {
-            log.warn("Access Token 파싱 실패 - error: {}", e.getMessage());
-            throw new AuthException(AuthExceptionType.ACCESS_TOKEN_PARSE_FAILED);
-        }
+    public AuthResponse signin(String tempCode) {
+        log.info("로그인 시도 - tempCode: {}", tempCode);
 
-        if (!refreshTokenRedisService.exists(accountId)) {
-            log.warn("Refresh Token 없음 - accountId: {}", accountId);
-            throw new AuthException(AuthExceptionType.REFRESH_TOKEN_NOT_FOUND);
-        }
+        // Temporary Code에서 계정 ID 조회 (1회용)
+        Long accountId = oauthCodeRedisService.getAndDelete(tempCode)
+                .orElseThrow(() -> new AuthException(AuthExceptionType.INVALID_TEMP_CODE));
 
         Account account = accountChecker.checkAccountExists(accountId);
 
+        // Access Token 발급
+        String accessToken = jwtProvider.generateAccessToken(
+                account.getId(),
+                account.getRole()
+        );
+
+        // Refresh Token 발급 (기존 토큰 교체)
+        String refreshToken = refreshTokenRedisService.createAndSave(account.getId());
+
+        log.info("로그인 완료 - accountId: {}", accountId);
+
+        return new AuthResponse(accessToken, refreshToken);
+    }
+
+    /**
+     * Refresh Token으로 새로운 Access Token 및 Refresh Token 발급 (Rotation)
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public AuthResponse refresh(String refreshToken) {
+        log.info("토큰 갱신 시도");
+
+        // 1단계: JWT 검증 (만료, 서명, 형식)
+        if (!jwtProvider.validateRefreshToken(refreshToken)) {
+            log.warn("유효하지 않은 Refresh Token");
+            throw new AuthException(AuthExceptionType.INVALID_REFRESH_TOKEN);
+        }
+
+        Long accountId = jwtProvider.getAccountIdFromToken(refreshToken);
+        String jti = jwtProvider.getJtiFromToken(refreshToken);
+
+        // 2단계: Redis 검증 (로그아웃 여부, JTI 일치)
+        String storedJti = refreshTokenRedisService.get(accountId)
+                .orElseThrow(() -> new AuthException(AuthExceptionType.REFRESH_TOKEN_NOT_FOUND));
+
+        if (!storedJti.equals(jti)) {
+            log.warn("Refresh Token JTI 불일치 - accountId: {}", accountId);
+            throw new AuthException(AuthExceptionType.REFRESH_TOKEN_MISMATCH);
+        }
+
+        // 계정 확인
+        Account account = accountChecker.checkAccountExists(accountId);
+
+        // 새 토큰 발급 (Rotation)
         String newAccessToken = jwtProvider.generateAccessToken(
                 account.getId(),
                 account.getRole()
         );
 
+        String newRefreshToken = refreshTokenRedisService.createAndSave(account.getId());
+
         log.info("토큰 갱신 완료 - accountId: {}", accountId);
 
-        return new AuthResponse(newAccessToken, "Bearer");
+        return new AuthResponse(newAccessToken, newRefreshToken);
     }
 
     /**

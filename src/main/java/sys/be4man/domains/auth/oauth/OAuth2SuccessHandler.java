@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -18,14 +19,15 @@ import sys.be4man.domains.account.model.entity.Account;
 import sys.be4man.domains.account.repository.AccountRepository;
 import sys.be4man.domains.auth.dto.GitHubTempInfo;
 import sys.be4man.domains.auth.jwt.JwtProvider;
-import sys.be4man.domains.auth.service.RefreshTokenRedisService;
+import sys.be4man.domains.auth.service.OAuthCodeRedisService;
 import sys.be4man.domains.auth.service.SignTokenRedisService;
 
 /**
  * OAuth2 로그인 성공 후 처리하는 핸들러
  * <p>
- * Flow: 1. GitHub에서 사용자 정보 추출 2. DB에서 계정 조회 (githubId 기준) 3-a. 계정 존재: JWT 발급, Refresh Token Redis
- * 저장 3-b. 계정 없음: SignToken 발급 (githubId만 포함), GitHub 정보는 Fragment로 전달
+ * Flow: 1. GitHub에서 사용자 정보 추출 2. DB에서 계정 조회 (githubId 기준) 3-a. 계정 존재: Temporary Code 발급 → Frontend
+ * → /signin API 호출 → 토큰 발급 3-b. 계정 없음: SignToken 발급 (githubId만 포함), GitHub 정보 Redis 저장 → /signup
+ * API 호출
  */
 @Slf4j
 @Component
@@ -34,8 +36,8 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
 
     private final AccountRepository accountRepository;
     private final JwtProvider jwtProvider;
-    private final RefreshTokenRedisService refreshTokenRedisService;
     private final SignTokenRedisService signTokenRedisService;
+    private final OAuthCodeRedisService oauthCodeRedisService;
 
     @Value("${app.frontend.url}")
     private String frontendUrl;
@@ -60,7 +62,6 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
             log.info("OAuth2 success - githubId: {}, email: {}", githubId, email);
 
             Account account = accountRepository.findByGithubId(githubId)
-                    .or(() -> accountRepository.findByEmail(email))
                     .orElse(null);
 
             String redirectUrl;
@@ -73,18 +74,15 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
                 account.updateGitHubAccessToken(githubAccessToken);
                 accountRepository.save(account);
 
-                // Refresh Token 생성 및 Redis 저장 (UUID)
-                refreshTokenRedisService.createAndSave(account.getId());
+                // Temporary Code 생성 및 Redis 저장 (5분 유효)
+                String tempCode = UUID.randomUUID().toString();
+                oauthCodeRedisService.save(tempCode, account.getId());
 
+                // Fragment에 Temporary Code만 전달
                 redirectUrl = String.format(
-                        "%s/auth/callback#requires_signup=false&access_token=%s&token_type=Bearer",
+                        "%s/auth/callback#requires_signup=false&code=%s",
                         frontendUrl,
-                        URLEncoder.encode(jwtProvider.generateAccessToken(
-                                                  account.getId(),
-                                                  account.getRole()
-                                          ),
-                                          StandardCharsets.UTF_8
-                        )
+                        tempCode
                 );
 
             } else {

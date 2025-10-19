@@ -15,9 +15,14 @@ public interface AuthService {
             String department, AccountPosition position);
 
     /**
-     * Access Token으로 사용자 조회 후 새로운 Access Token 발급
+     * OAuth 임시 코드로 로그인 (기존 사용자)
      */
-    AuthResponse refresh(String accessToken);
+    AuthResponse signin(String tempCode);
+
+    /**
+     * Refresh Token으로 새로운 Access Token 및 Refresh Token 발급
+     */
+    AuthResponse refresh(String refreshToken);
 
     /**
      * Access Token으로 사용자 조회 후 Refresh Token 삭제 (로그아웃)
