@@ -18,3 +18,5 @@ public enum NotificationType {
         this.koreanName = koreanName;
     }
 }
+
+

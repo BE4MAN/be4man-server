@@ -17,3 +17,5 @@ public enum BanType {
         this.koreanName = koreanName;
     }
 }
+
+

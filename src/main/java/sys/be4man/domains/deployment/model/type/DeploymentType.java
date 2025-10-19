@@ -20,3 +20,5 @@ public enum DeploymentType {
         this.koreanName = koreanName;
     }
 }
+
+
