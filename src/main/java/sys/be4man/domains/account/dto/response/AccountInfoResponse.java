@@ -1,7 +1,8 @@
 package sys.be4man.domains.account.dto.response;
 
 import sys.be4man.domains.account.model.entity.Account;
-import sys.be4man.domains.account.model.type.AccountPosition;
+import sys.be4man.domains.account.model.type.JobDepartment;
+import sys.be4man.domains.account.model.type.JobPosition;
 import sys.be4man.domains.account.model.type.Role;
 
 /**
@@ -13,8 +14,8 @@ public record AccountInfoResponse(
         String name,
         String profileImageUrl,
         Role role,
-        AccountPosition position,
-        String department
+        JobPosition position,
+        JobDepartment department
 ) {
 
     /**

@@ -1,6 +1,7 @@
 package sys.be4man.domains.auth.service;
 
-import sys.be4man.domains.account.model.type.AccountPosition;
+import sys.be4man.domains.account.model.type.JobDepartment;
+import sys.be4man.domains.account.model.type.JobPosition;
 import sys.be4man.domains.auth.dto.response.AuthResponse;
 
 /**
@@ -12,7 +13,7 @@ public interface AuthService {
      * SignToken을 사용하여 신규 계정 생성
      */
     AuthResponse signup(String signToken, String name,
-            String department, AccountPosition position);
+            JobDepartment department, JobPosition position);
 
     /**
      * OAuth 임시 코드로 로그인 (기존 사용자)

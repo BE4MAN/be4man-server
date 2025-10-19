@@ -5,7 +5,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import sys.be4man.domains.account.model.entity.Account;
-import sys.be4man.domains.account.model.type.AccountPosition;
+import sys.be4man.domains.account.model.type.JobDepartment;
+import sys.be4man.domains.account.model.type.JobPosition;
 import sys.be4man.domains.account.model.type.Role;
 import sys.be4man.domains.account.repository.AccountRepository;
 import sys.be4man.domains.account.service.AccountChecker;
@@ -36,7 +37,7 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public AuthResponse signup(String signToken, String name,
-            String department, AccountPosition position) {
+            JobDepartment department, JobPosition position) {
         log.info("회원가입 시도 - name: {}", name);
 
         if (!jwtProvider.validateSignToken(signToken)) {

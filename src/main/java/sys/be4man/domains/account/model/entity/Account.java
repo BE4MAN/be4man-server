@@ -12,7 +12,8 @@ import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import sys.be4man.domains.account.model.type.AccountPosition;
+import sys.be4man.domains.account.model.type.JobDepartment;
+import sys.be4man.domains.account.model.type.JobPosition;
 import sys.be4man.domains.account.model.type.Role;
 import sys.be4man.global.model.entity.BaseEntity;
 
@@ -40,11 +41,12 @@ public class Account extends BaseEntity {
     private Role role;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "position", nullable = false)
-    private AccountPosition position;
+    @Column(name = "position", nullable = false, length = 20)
+    private JobPosition position;
 
-    @Column(name = "department", length = 25)
-    private String department;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "department", nullable = false, length = 20)
+    private JobDepartment department;
 
     @Column(name = "profile_image_url", length = 512)
     private String profileImageUrl;
@@ -54,7 +56,7 @@ public class Account extends BaseEntity {
 
     @Builder
     public Account(Long githubId, String name, String email, Role role,
-            AccountPosition position, String department, String profileImageUrl,
+            JobPosition position, JobDepartment department, String profileImageUrl,
             String githubAccessToken) {
         this.githubId = githubId;
         this.name = name;
