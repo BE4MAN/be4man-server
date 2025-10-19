@@ -17,3 +17,5 @@ public enum RiskLevel {
         this.koreanName = koreanName;
     }
 }
+
+
