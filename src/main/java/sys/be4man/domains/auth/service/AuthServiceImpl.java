@@ -156,18 +156,8 @@ public class AuthServiceImpl implements AuthService {
      */
     @Override
     @Transactional
-    public void logout(String authorization) {
-        String accessToken = authorization.replace("Bearer ", "");
-
-        // Access Token 검증
-        if (!jwtProvider.validateToken(accessToken)) {
-            log.warn("유효하지 않은 Access Token으로 로그아웃 시도");
-            throw new AuthException(AuthExceptionType.INVALID_ACCESS_TOKEN);
-        }
-
-        Long accountId = jwtProvider.getAccountIdFromToken(accessToken);
+    public void logout(Long accountId) {
         refreshTokenRedisService.delete(accountId);
-
         log.info("로그아웃 완료 - accountId: {}", accountId);
     }
 }

@@ -26,7 +26,7 @@ public interface AuthService {
     AuthResponse refresh(String refreshToken);
 
     /**
-     * Access Token으로 사용자 조회 후 Refresh Token 삭제 (로그아웃)
+     * Refresh Token 삭제 (로그아웃)
      */
-    void logout(String authorization);
+    void logout(Long accountId);
 }
