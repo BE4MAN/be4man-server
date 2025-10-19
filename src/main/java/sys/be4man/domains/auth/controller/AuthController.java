@@ -1,6 +1,7 @@
 package sys.be4man.domains.auth.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -36,6 +37,12 @@ public class AuthController {
 
     private final AuthService authService;
 
+    /**
+     * 회원가입 Authorization 헤더로 SignToken 받음
+     *
+     * @param authorization Authorization: Bearer {signToken}
+     * @param request       회원가입 정보 (name, department, position)
+     */
     @Operation(summary = "회원가입", description = "GitHub OAuth 인증 후 SignToken을 사용하여 계정을 생성합니다.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "회원가입 성공",
@@ -47,6 +54,7 @@ public class AuthController {
     })
     @PostMapping("/signup")
     public ResponseEntity<AuthResponse> signup(
+            @Parameter(description = "SignToken (Bearer 토큰)", required = true)
             @RequestHeader("Authorization") String authorization,
             @Valid @RequestBody SignupRequest request
     ) {
@@ -65,6 +73,13 @@ public class AuthController {
         return ResponseEntity.ok(authResponse);
     }
 
+    /**
+     * 로그인 (기존 사용자)
+     * OAuth 인증 후 발급된 임시 코드로 토큰 발급
+     *
+     * @param request 임시 코드
+     * @return Access Token + Refresh Token
+     */
     @Operation(summary = "로그인", description = "GitHub OAuth 인증 후 발급된 임시 코드로 Access Token과 Refresh Token을 발급받습니다.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "로그인 성공",
@@ -85,6 +100,13 @@ public class AuthController {
         return ResponseEntity.ok(authResponse);
     }
 
+    /**
+     * 토큰 갱신
+     * Refresh Token으로 새로운 Access Token 및 Refresh Token 발급
+     *
+     * @param request Refresh Token
+     * @return 새로운 Access Token + Refresh Token
+     */
     @Operation(summary = "토큰 갱신", description = "Refresh Token을 사용하여 새로운 Access Token과 Refresh Token을 발급받습니다. (Token Rotation)")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "토큰 갱신 성공",
@@ -105,6 +127,13 @@ public class AuthController {
         return ResponseEntity.ok(authResponse);
     }
 
+    /**
+     * 로그아웃
+     * Redis에서 Refresh Token을 삭제하여 로그아웃합니다.
+     *
+     * @param principal 현재 로그인한 사용자 정보
+     * @return 성공 메시지
+     */
     @Operation(summary = "로그아웃", description = "Redis에서 Refresh Token을 삭제하여 로그아웃합니다.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "로그아웃 성공",
@@ -115,7 +144,7 @@ public class AuthController {
     @SecurityRequirement(name = "Bearer Authentication")
     @PostMapping("/logout")
     public ResponseEntity<String> logout(
-            @AuthenticationPrincipal AccountPrincipal principal
+            @Parameter(hidden = true) @AuthenticationPrincipal AccountPrincipal principal
     ) {
         log.info("로그아웃 요청 - accountId: {}", principal.accountId());
 

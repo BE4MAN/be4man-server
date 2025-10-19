@@ -30,6 +30,9 @@ public class AccountController {
 
     private final AccountService accountService;
 
+    /**
+     * 내 계정 정보 조회
+     */
     @Operation(summary = "내 계정 정보 조회", description = "현재 로그인한 사용자의 계정 정보를 조회합니다.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "조회 성공",
