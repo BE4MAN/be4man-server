@@ -12,7 +12,7 @@ public enum AuthExceptionType implements ExceptionType {
     // SignToken 관련
     INVALID_SIGN_TOKEN("유효하지 않은 SignToken입니다"),
     EXPIRED_SIGN_TOKEN("만료된 SignToken입니다"),
-    SIGN_TOKEN_INFO_NOT_FOUND("SignToken 정보를 찾을 수 없습니다 (Redis에 정보 없음)"),
+    SIGN_TOKEN_INFO_NOT_FOUND("SignToken 정보를 찾을 수 없습니다"),
 
     // Access Token 관련
     INVALID_ACCESS_TOKEN("유효하지 않은 Access Token입니다"),
