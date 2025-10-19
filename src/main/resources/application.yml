@@ -39,9 +39,39 @@ spring:
       host: localhost
       port: 6379
 
+  # OAuth2 설정
+  security:
+    oauth2:
+      client:
+        registration:
+          github:
+            client-id: ${GITHUB_CLIENT_ID}
+            client-secret: ${GITHUB_CLIENT_SECRET}
+            scope:
+              - read:user
+              - user:email
+              - repo
+              - repo:status
+              - repo_deployment
+              - admin:repo_hook
+              - repo:invite
+            client-name: GitHub
+
 # Server
 server:
   port: 8080
+
+jwt:
+  secret: ${JWT_SECRET}
+  access-expiration: ${JWT_ACCESS_TOKEN_EXPIRATION}
+  refresh-expiration: ${JWT_REFRESH_TOKEN_EXPIRATION}
+  sign-expiration: ${JWT_SIGN_TOKEN_EXPIRATION}
+
+# Frontend URL
+app:
+  frontend:
+    url: ${FRONTEND_URL:http://localhost:5173}
+
 
 # Logging
 logging:
