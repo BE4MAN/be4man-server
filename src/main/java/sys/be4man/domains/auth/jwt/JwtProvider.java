@@ -7,6 +7,7 @@ import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
+import java.util.UUID;
 import javax.crypto.SecretKey;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -22,15 +23,18 @@ public class JwtProvider {
 
     private final SecretKey secretKey;
     private final long accessTokenExpiration;
+    private final long refreshTokenExpiration;
     private final long signTokenExpiration;
 
     public JwtProvider(
             @Value("${jwt.secret}") String secret,
             @Value("${jwt.access-expiration}") long accessExpiration,
+            @Value("${jwt.refresh-expiration}") long refreshExpiration,
             @Value("${jwt.sign-expiration}") long signExpiration
     ) {
         this.secretKey = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
         this.accessTokenExpiration = accessExpiration;
+        this.refreshTokenExpiration = refreshExpiration;
         this.signTokenExpiration = signExpiration;
     }
 
@@ -48,6 +52,26 @@ public class JwtProvider {
         return Jwts.builder()
                 .subject(String.valueOf(accountId))
                 .claim("role", role.name())
+                .issuedAt(now)
+                .expiration(expiration)
+                .signWith(secretKey)
+                .compact();
+    }
+
+    /**
+     * RefreshToken 페이로드: accountId, jti, type
+     *
+     * @param accountId 계정 ID
+     * @return 생성된 RefreshToken (JWT)
+     */
+    public String generateRefreshToken(Long accountId) {
+        Date now = new Date();
+        Date expiration = new Date(now.getTime() + refreshTokenExpiration);
+
+        return Jwts.builder()
+                .subject(String.valueOf(accountId))
+                .claim("type", "refresh")
+                .claim("jti", UUID.randomUUID().toString())
                 .issuedAt(now)
                 .expiration(expiration)
                 .signWith(secretKey)
@@ -123,6 +147,30 @@ public class JwtProvider {
     }
 
     /**
+     * RefreshToken 검증
+     */
+    public boolean validateRefreshToken(String refreshToken) {
+        try {
+            Claims claims = getClaims(refreshToken);
+            String tokenType = claims.get("type", String.class);
+
+            if (!"refresh".equals(tokenType)) {
+                log.warn("RefreshToken이 아닌 토큰입니다: {}", tokenType);
+                return false;
+            }
+
+            return true;
+        } catch (ExpiredJwtException e) {
+            log.warn("만료된 RefreshToken입니다: {}", e.getMessage());
+        } catch (JwtException e) {
+            log.warn("유효하지 않은 RefreshToken입니다: {}", e.getMessage());
+        } catch (Exception e) {
+            log.error("RefreshToken 검증 중 오류가 발생했습니다: {}", e.getMessage());
+        }
+        return false;
+    }
+
+    /**
      * SignToken 검증
      */
     public boolean validateSignToken(String signToken) {
@@ -144,6 +192,13 @@ public class JwtProvider {
             log.error("SignToken 검증 중 오류가 발생했습니다: {}", e.getMessage());
         }
         return false;
+    }
+
+    /**
+     * JWT 토큰에서 JTI (JWT ID) 추출
+     */
+    public String getJtiFromToken(String token) {
+        return getClaims(token).get("jti", String.class);
     }
 
     /**

@@ -19,7 +19,14 @@ public enum AuthExceptionType implements ExceptionType {
     ACCESS_TOKEN_PARSE_FAILED("Access Token 파싱에 실패했습니다"),
 
     // Refresh Token 관련
-    REFRESH_TOKEN_NOT_FOUND("Refresh Token을 찾을 수 없습니다");
+    REFRESH_TOKEN_NOT_FOUND("Refresh Token을 찾을 수 없습니다"),
+    INVALID_REFRESH_TOKEN("유효하지 않은 Refresh Token입니다"),
+    EXPIRED_REFRESH_TOKEN("만료된 Refresh Token입니다"),
+    REFRESH_TOKEN_MISMATCH("Refresh Token이 일치하지 않습니다"),
+
+    // OAuth Temporary Code 관련
+    INVALID_TEMP_CODE("유효하지 않은 임시 코드입니다"),
+    TEMP_CODE_EXPIRED("임시 코드가 만료되었습니다");
 
     private final String message;
 

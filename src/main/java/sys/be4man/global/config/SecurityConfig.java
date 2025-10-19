@@ -93,8 +93,10 @@ public class SecurityConfig {
                                 "/oauth/**",
                                 "/login/oauth2/**",
 
-                                // 인증 API
+                                // 인증 API (인증 불필요)
                                 "/api/auth/signup",
+                                "/api/auth/signin",
+                                "/api/auth/refresh",
 
                                 // 공개 API
                                 "/public/**"

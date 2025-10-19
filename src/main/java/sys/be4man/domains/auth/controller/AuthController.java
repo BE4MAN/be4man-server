@@ -9,6 +9,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import sys.be4man.domains.auth.dto.request.RefreshRequest;
+import sys.be4man.domains.auth.dto.request.SigninRequest;
 import sys.be4man.domains.auth.dto.request.SignupRequest;
 import sys.be4man.domains.auth.dto.response.AuthResponse;
 import sys.be4man.domains.auth.service.AuthService;
@@ -51,21 +53,37 @@ public class AuthController {
     }
 
     /**
-     * 토큰 갱신 Authorization 헤더로 Access Token 받음
+     * 로그인 (기존 사용자)
+     * OAuth 인증 후 발급된 임시 코드로 토큰 발급
      *
-     * @param authorization Authorization: Bearer {accessToken}
-     * @return 새로운 Access Token + 계정 정보
+     * @param request 임시 코드
+     * @return Access Token + Refresh Token
+     */
+    @PostMapping("/signin")
+    public ResponseEntity<AuthResponse> signin(
+            @Valid @RequestBody SigninRequest request
+    ) {
+        log.info("로그인 요청");
+
+        AuthResponse authResponse = authService.signin(request.code());
+
+        return ResponseEntity.ok(authResponse);
+    }
+
+    /**
+     * 토큰 갱신
+     * Refresh Token으로 새로운 Access Token 및 Refresh Token 발급
+     *
+     * @param request Refresh Token
+     * @return 새로운 Access Token + Refresh Token
      */
     @PostMapping("/refresh")
     public ResponseEntity<AuthResponse> refresh(
-            @RequestHeader("Authorization") String authorization
+            @Valid @RequestBody RefreshRequest request
     ) {
         log.info("토큰 갱신 요청");
 
-        // Bearer 토큰 추출
-        String accessToken = authorization.replace("Bearer ", "");
-
-        AuthResponse authResponse = authService.refresh(accessToken);
+        AuthResponse authResponse = authService.refresh(request.refreshToken());
 
         return ResponseEntity.ok(authResponse);
     }
