@@ -8,13 +8,12 @@ import sys.be4man.domains.account.model.entity.Account;
 import sys.be4man.domains.account.model.type.AccountPosition;
 import sys.be4man.domains.account.model.type.Role;
 import sys.be4man.domains.account.repository.AccountRepository;
+import sys.be4man.domains.account.service.AccountChecker;
 import sys.be4man.domains.auth.dto.GitHubTempInfo;
 import sys.be4man.domains.auth.dto.response.AuthResponse;
 import sys.be4man.domains.auth.exception.AuthException;
 import sys.be4man.domains.auth.exception.type.AuthExceptionType;
 import sys.be4man.domains.auth.jwt.JwtProvider;
-import sys.be4man.global.exception.ConflictException;
-import sys.be4man.global.exception.NotFoundException;
 
 /**
  * 인증 관련 비즈니스 로직 구현체
@@ -25,6 +24,7 @@ import sys.be4man.global.exception.NotFoundException;
 public class AuthServiceImpl implements AuthService {
 
     private final AccountRepository accountRepository;
+    private final AccountChecker accountChecker;
     private final JwtProvider jwtProvider;
     private final RefreshTokenRedisService refreshTokenRedisService;
     private final SignTokenRedisService signTokenRedisService;
@@ -48,22 +48,15 @@ public class AuthServiceImpl implements AuthService {
         // Redis에서 GitHub 정보 조회 및 삭제
         GitHubTempInfo tempInfo = signTokenRedisService.getAndDelete(githubId)
                 .orElseThrow(() -> new AuthException(AuthExceptionType.SIGN_TOKEN_INFO_NOT_FOUND));
-
-        // Redis에서 가져온 이메일 사용
-        String email = tempInfo.email();
-
-        log.info("회원가입 진행 - githubId: {}, email: {}", githubId, email);
+        log.info("회원가입 진행 - githubId: {}", githubId);
 
         // 중복 계정 확인
-        if (accountRepository.findByGithubId(githubId).isPresent()) {
-            log.warn("중복 계정 시도 - githubId: {}", githubId);
-            throw new ConflictException();
-        }
+        accountChecker.checkConflictAccountExistsByGithubId(githubId);
 
         // 신규 계정 생성
         Account newAccount = Account.builder()
                 .githubId(githubId)
-                .email(email)
+                .email(tempInfo.email())
                 .name(name)
                 .department(department)
                 .profileImageUrl(tempInfo.profileImageUrl())
@@ -74,13 +67,11 @@ public class AuthServiceImpl implements AuthService {
 
         accountRepository.save(newAccount);
 
-        // JWT AccessToken 생성 (userId, role만)
         String accessToken = jwtProvider.generateAccessToken(
                 newAccount.getId(),
                 newAccount.getRole()
         );
 
-        // Refresh Token 생성 및 Redis 저장 (UUID)
         refreshTokenRedisService.createAndSave(newAccount.getId());
 
         log.info("회원가입 완료 - ID: {}, githubId: {}", newAccount.getId(), githubId);
@@ -94,28 +85,27 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional(readOnly = true)
     public AuthResponse refresh(String accessToken) {
-        Long userId;
+        Long accountId;
         try {
-            userId = jwtProvider.getAccountIdFromToken(accessToken);
+            accountId = jwtProvider.getAccountIdFromToken(accessToken);
         } catch (Exception e) {
             log.warn("Access Token 파싱 실패 - error: {}", e.getMessage());
             throw new AuthException(AuthExceptionType.ACCESS_TOKEN_PARSE_FAILED);
         }
 
-        if (!refreshTokenRedisService.exists(userId)) {
-            log.warn("Refresh Token 없음 - userId: {}", userId);
+        if (!refreshTokenRedisService.exists(accountId)) {
+            log.warn("Refresh Token 없음 - accountId: {}", accountId);
             throw new AuthException(AuthExceptionType.REFRESH_TOKEN_NOT_FOUND);
         }
 
-        Account account = accountRepository.findById(userId)
-                .orElseThrow(NotFoundException::new);
+        Account account = accountChecker.checkAccountExists(accountId);
 
         String newAccessToken = jwtProvider.generateAccessToken(
                 account.getId(),
                 account.getRole()
         );
 
-        log.info("토큰 갱신 완료 - userId: {}", userId);
+        log.info("토큰 갱신 완료 - accountId: {}", accountId);
 
         return new AuthResponse(newAccessToken, "Bearer");
     }

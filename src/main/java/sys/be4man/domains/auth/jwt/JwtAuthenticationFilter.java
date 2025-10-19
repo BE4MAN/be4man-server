@@ -17,6 +17,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 import sys.be4man.domains.account.model.type.Role;
+import sys.be4man.domains.auth.dto.AccountPrincipal;
 
 @Slf4j
 @Component
@@ -96,34 +97,39 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     /**
-     * JWT 토큰에서 사용자 정보를 추출하여 SecurityContext에 인증 정보를 설정합니다.
+     * JWT 토큰에서 계정 정보를 추출하여 SecurityContext에 인증 정보를 설정합니다.
      *
      * @param request HTTP 요청
      * @param token   JWT 토큰
      */
     private void setAuthenticationToContext(HttpServletRequest request, String token) {
-        // 토큰에서 userId와 권한 정보 추출
-        Long userId = jwtProvider.getAccountIdFromToken(token);
+        Long accountId = jwtProvider.getAccountIdFromToken(token);
         Role role = jwtProvider.getRoleFromToken(token);
 
-        // Spring Security의 권한 형식으로 변환 (ROLE_ 접두사 추가)
-        SimpleGrantedAuthority authority = new SimpleGrantedAuthority("ROLE_" + role.name());
+        AccountPrincipal principal = new AccountPrincipal(accountId, role);
+        UsernamePasswordAuthenticationToken authentication = createAuthentication(principal);
 
-        // 인증 객체 생성
-        UsernamePasswordAuthenticationToken authentication =
-                new UsernamePasswordAuthenticationToken(
-                        String.valueOf(userId),  // principal: 사용자 ID (String으로 변환)
-                        null,   // credentials: 비밀번호 (JWT 인증에서는 불필요)
-                        List.of(authority)  // authorities: 권한 목록
-                );
-
-        // 요청의 세부 정보 설정 (IP 주소, 세션 ID 등)
         authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-
-        // SecurityContext에 인증 정보 저장
         SecurityContextHolder.getContext().setAuthentication(authentication);
 
-        log.debug("JWT 인증 성공 - userId: {}, 권한: {}", userId, role);
+        log.debug("JWT 인증 성공 - accountId: {}, 권한: {}", accountId, role);
+    }
+
+    /**
+     * AccountPrincipal로부터 Spring Security Authentication 객체 생성
+     *
+     * @param principal AccountPrincipal
+     * @return UsernamePasswordAuthenticationToken
+     */
+    private UsernamePasswordAuthenticationToken createAuthentication(AccountPrincipal principal) {
+        SimpleGrantedAuthority authority = 
+                new SimpleGrantedAuthority("ROLE_" + principal.role().name());
+
+        return new UsernamePasswordAuthenticationToken(
+                principal,
+                null,
+                List.of(authority)
+        );
     }
 }
 

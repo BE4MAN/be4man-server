@@ -35,18 +35,18 @@ public class JwtProvider {
     }
 
     /**
-     * AccessToken 페이로드: userId, role
+     * AccessToken 페이로드: accountId, role
      *
-     * @param userId 사용자 ID
-     * @param role   사용자 권한
+     * @param accountId 계정 ID
+     * @param role      계정 권한
      * @return 생성된 AccessToken
      */
-    public String generateAccessToken(Long userId, Role role) {
+    public String generateAccessToken(Long accountId, Role role) {
         Date now = new Date();
         Date expiration = new Date(now.getTime() + accessTokenExpiration);
 
         return Jwts.builder()
-                .subject(String.valueOf(userId))
+                .subject(String.valueOf(accountId))
                 .claim("role", role.name())
                 .issuedAt(now)
                 .expiration(expiration)
@@ -94,10 +94,10 @@ public class JwtProvider {
     }
 
     /**
-     * Access Token에서 사용자 ID 추출
+     * Access Token에서 계정 ID 추출
      */
     public Long getAccountIdFromToken(String token) {
-        return Long.valueOf(getClaims(token).getSubject());
+        return getIdFromToken(token);
     }
 
     /**
@@ -112,7 +112,14 @@ public class JwtProvider {
      * SignToken에서 GitHub ID 추출
      */
     public Long getGithubIdFromSignToken(String signToken) {
-        return Long.valueOf(getClaims(signToken).getSubject());
+        return getIdFromToken(signToken);
+    }
+
+    /**
+     * JWT 토큰에서 ID(subject) 추출
+     */
+    private Long getIdFromToken(String token) {
+        return Long.valueOf(getClaims(token).getSubject());
     }
 
     /**
