@@ -63,9 +63,9 @@ server:
 
 jwt:
   secret: ${JWT_SECRET}
-  access-expiration: ${JWT_ACCESS_TOKEN_EXPIRATION}
-  refresh-expiration: ${JWT_REFRESH_TOKEN_EXPIRATION}
-  sign-expiration: ${JWT_SIGN_TOKEN_EXPIRATION}
+  access-expiration: 3600000
+  refresh-expiration: 1209600000
+  sign-expiration: 300000
 
 # Frontend URL
 app:
