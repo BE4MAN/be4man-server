@@ -9,7 +9,9 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
+import org.springframework.data.redis.serializer.Jackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
+import sys.be4man.domains.auth.dto.GitHubTempInfo;
 
 @Configuration
 public class RedisConfig {
@@ -32,6 +34,33 @@ public class RedisConfig {
         template.setValueSerializer(serializer);
         template.setHashKeySerializer(new StringRedisSerializer());
         template.setHashValueSerializer(serializer);
+
+        return template;
+    }
+
+    @Bean
+    public RedisTemplate<String, GitHubTempInfo> signTokenRedisTemplate(
+            RedisConnectionFactory connectionFactory) {
+        RedisTemplate<String, GitHubTempInfo> template = new RedisTemplate<>();
+        template.setConnectionFactory(connectionFactory);
+
+        Jackson2JsonRedisSerializer<GitHubTempInfo> serializer =
+                new Jackson2JsonRedisSerializer<>(GitHubTempInfo.class);
+
+        template.setKeySerializer(new StringRedisSerializer());
+        template.setValueSerializer(serializer);
+
+        return template;
+    }
+
+    @Bean
+    public RedisTemplate<String, String> refreshTokenRedisTemplate(
+            RedisConnectionFactory connectionFactory) {
+        RedisTemplate<String, String> template = new RedisTemplate<>();
+        template.setConnectionFactory(connectionFactory);
+
+        template.setKeySerializer(new StringRedisSerializer());
+        template.setValueSerializer(new StringRedisSerializer());
 
         return template;
     }
