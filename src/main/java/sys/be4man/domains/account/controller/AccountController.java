@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 import sys.be4man.domains.account.dto.response.AccountInfoResponse;
 import sys.be4man.domains.account.service.AccountService;
 import sys.be4man.domains.auth.dto.AccountPrincipal;
+import sys.be4man.global.dto.response.ErrorResponse;
 
 /**
  * 계정 관련 API 컨트롤러
@@ -38,9 +39,9 @@ public class AccountController {
             @ApiResponse(responseCode = "200", description = "조회 성공",
                     content = @Content(schema = @Schema(implementation = AccountInfoResponse.class))),
             @ApiResponse(responseCode = "401", description = "인증되지 않은 사용자",
-                    content = @Content),
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
             @ApiResponse(responseCode = "404", description = "계정을 찾을 수 없음",
-                    content = @Content)
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
     @SecurityRequirement(name = "Bearer Authentication")
     @GetMapping("/me")
