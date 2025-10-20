@@ -47,51 +47,49 @@ pipeline {
             }
         }
 
-        stage('Deploy to VM') {
-            steps {
-                script {
-                  withCredentials([string(credentialsId: 'db_password', variable: 'DB_PASSWORD'),
-                   string(credentialsId: 'db_url', variable: 'DB_URL'),
-                   string(credentialsId: 'db_username', variable: 'DB_USERNAME'),
-                   string(credentialsId: 'db_schema', variable: 'DB_SCHEMA'),
-                   string(credentialsId: 'github_client_id', variable: 'GITHUB_CLIENT_ID'),
-                   string(credentialsId: 'github_client_secret', variable: 'GITHUB_CLIENT_SECRET'),
-                   string(credentialsId: 'jwt_secret', variable: 'JWT_SECRET'),
-                   string(credentialsId: 'frontend_url', variable: 'FRONTEND_URL')]
-                   ) {
-                    sshagent(credentials: [env.VM_SSH_CRED_ID]) {
-                        sh """
-                            # Host Key 검사를 무시하고 SSH 접속 (-o StrictHostKeyChecking=no)
-                            ssh -o StrictHostKeyChecking=no ${env.VM_USER}@${env.VM_HOST_IP} '
+stage('Deploy to VM') {
+            steps {
+                script {
+                  // withCredentials 블록은 그대로 유지
+                  withCredentials([string(credentialsId: 'db_password', variable: 'DB_PASSWORD'),
+                   string(credentialsId: 'db_url', variable: 'DB_URL'),
+                   string(credentialsId: 'db_username', variable: 'DB_USERNAME'),
+                   string(credentialsId: 'db_schema', variable: 'DB_SCHEMA'),
+                   string(credentialsId: 'github_client_id', variable: 'GITHUB_CLIENT_ID'),
+                   string(credentialsId: 'github_client_secret', variable: 'GITHUB_CLIENT_SECRET'),
+                   string(credentialsId: 'jwt_secret', variable: 'JWT_SECRET'),
+                   string(credentialsId: 'frontend_url', variable: 'FRONTEND_URL')]
+                   ) {
+                    sshagent(credentials: [env.VM_SSH_CRED_ID]) {
+                        
+                        // **핵심 수정: SSH 내의 명령을 세미콜론으로 연결하고 \를 제거**
+                        sh """
+                            ssh -o StrictHostKeyChecking=no ${env.VM_USER}@${env.VM_HOST_IP} '
+                                # 1. 기존 컨테이너 중지 및 삭제
+                                docker stop be4man_app || true; 
+                                docker rm be4man_app || true;
 
-                                # 1. 기존 컨테이너 중지 및 삭제 (오류 무시: || true)
-                                docker stop be4man_app || true
-                                docker rm be4man_app || true
+                                # 2. Docker Hub에서 새 이미지 Pull
+                                docker pull ${env.DOCKER_IMAGE_NAME}:${env.BUILD_NUMBER};
 
-                                # 2. Docker Hub에서 새 이미지 Pull
-                                docker pull ${env.DOCKER_IMAGE_NAME}:${env.BUILD_NUMBER}
-
-                                # 3. 새 컨테이너 실행 (환경 변수 주입)
-                                docker run -d \\
-                                --name be4man_app \\
-                                -p 8080:8080 \\
-                                -e DB_URL="${DB_URL}" \\
-                                -e DB_USERNAME="${DB_USERNAME}" \\
-                                -e DB_PASSWORD="${DB_PASSWORD}" \\
-                                -e DB_SCHEMA="${DB_SCHEMA}" \\
-                                -e GITHUB_CLIENT_ID="${GITHUB_CLIENT_ID}" \\
-                                -e GITHUB_CLIENT_SECRET="${GITHUB_CLIENT_SECRET}" \\
-                                -e JWT_SECRET="${JWT_SECRET}" \\
-                                -e FRONTEND_URL="${FRONTEND_URL}" \\
-
-                                ${env.DOCKER_IMAGE_NAME}:${env.BUILD_NUMBER}
-                            '
-                        """
-                    }
-                  }
-                }
-            }
-        }
+                                # 3. 새 컨테이너 실행 (환경 변수 주입)
+                                docker run -d --name be4man_app -p 8080:8080 
+                                -e DB_URL="${DB_URL}" 
+                                -e DB_USERNAME="${DB_USERNAME}" 
+                                -e DB_PASSWORD="${DB_PASSWORD}" 
+                                -e DB_SCHEMA="${DB_SCHEMA}" 
+                                -e GITHUB_CLIENT_ID="${GITHUB_CLIENT_ID}" 
+                                -e GITHUB_CLIENT_SECRET="${GITHUB_CLIENT_SECRET}" 
+                                -e JWT_SECRET="${JWT_SECRET}" 
+                                -e FRONTEND_URL="${FRONTEND_URL}" 
+                                ${env.DOCKER_IMAGE_NAME}:${env.BUILD_NUMBER}
+                            '
+                        """
+                    }
+                  }
+                }
+            }
+        }
     }
 
     post {
