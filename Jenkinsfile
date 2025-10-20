@@ -47,54 +47,58 @@ pipeline {
             }
         }
 
-        stage('Deploy to VM') {
-            steps {
-                script {
-                    withCredentials([
-                        string(credentialsId: 'db_password', variable: 'DB_PASSWORD'),
-                        string(credentialsId: 'db_url', variable: 'DB_URL'),
-                        string(credentialsId: 'db_username', variable: 'DB_USERNAME'),
-                        string(credentialsId: 'db_schema', variable: 'DB_SCHEMA'),
-                        string(credentialsId: 'github_client_id', variable: 'GITHUB_CLIENT_ID'),
-                        string(credentialsId: 'github_client_secret', variable: 'GITHUB_CLIENT_SECRET'),
-                        string(credentialsId: 'jwt_secret', variable: 'JWT_SECRET'),
-                        string(credentialsId: 'frontend_url', variable: 'FRONTEND_URL')
-                    ]) {
-                        sshagent(credentials: [env.VM_SSH_CRED_ID]) {
-                            def imageTag = "${env.DOCKER_IMAGE_NAME}:${env.BUILD_NUMBER}"
-                            sh """
+stage('Deploy to VM') {
+    steps {
+        script {
+            withCredentials([
+                string(credentialsId: 'db_password', variable: 'DB_PASSWORD'),
+                string(credentialsId: 'db_url', variable: 'DB_URL'),
+                string(credentialsId: 'db_username', variable: 'DB_USERNAME'),
+                string(credentialsId: 'db_schema', variable: 'DB_SCHEMA'),
+                string(credentialsId: 'github_client_id', variable: 'GITHUB_CLIENT_ID'),
+                string(credentialsId: 'github_client_secret', variable: 'GITHUB_CLIENT_SECRET'),
+                string(credentialsId: 'jwt_secret', variable: 'JWT_SECRET'),
+                string(credentialsId: 'frontend_url', variable: 'FRONTEND_URL')
+            ]) {
+                sshagent(credentials: [env.VM_SSH_CRED_ID]) {
+                    def imageTag = "${env.DOCKER_IMAGE_NAME}:${env.BUILD_NUMBER}"
+                    sh """
 ssh -o StrictHostKeyChecking=no ${env.VM_USER}@${env.VM_HOST_IP} /bin/bash <<'ENDSSH'
 set -e
 
-# 1) 기존 컨테이너 중지 & 삭제 (실패해도 계속)
+# 네트워크가 없으면 생성
+docker network create be4man-network || true
+
+# 기존 컨테이너 중지 및 삭제
 docker stop be4man_app || true
 docker rm be4man_app || true
 
-# 2) 이미지 pull
+# 이미지 풀
 docker pull ${imageTag}
 
-# 3) 새 컨테이너 실행 (환경 변수에 값이 직접 들어감)
-docker run -d --name be4man_app -p 8080:8080 --network be4man-network yoonyn/be4man-server \\
-  -e DB_URL="${env.DB_URL}" \\
-  -e DB_USERNAME="${env.DB_USERNAME}" \\
-  -e DB_PASSWORD="${env.DB_PASSWORD}" \\
-  -e DB_SCHEMA="${env.DB_SCHEMA}" \\
-  -e GITHUB_CLIENT_ID="${env.GITHUB_CLIENT_ID}" \\
-  -e GITHUB_CLIENT_SECRET="${env.GITHUB_CLIENT_SECRET}" \\
-  -e JWT_SECRET="${env.JWT_SECRET}" \\
-  -e FRONTEND_URL="${env.FRONTEND_URL}" \\
+# 컨테이너 실행 (옵션들이 IMAGE보다 앞에 오도록 주의)
+docker run -d --name be4man_app -p 8080:8080 --network be4man-network \
+  -e DB_URL="${env.DB_URL}" \
+  -e DB_USERNAME="${env.DB_USERNAME}" \
+  -e DB_PASSWORD="${env.DB_PASSWORD}" \
+  -e DB_SCHEMA="${env.DB_SCHEMA}" \
+  -e GITHUB_CLIENT_ID="${env.GITHUB_CLIENT_ID}" \
+  -e GITHUB_CLIENT_SECRET="${env.GITHUB_CLIENT_SECRET}" \
+  -e JWT_SECRET="${env.JWT_SECRET}" \
+  -e FRONTEND_URL="${env.FRONTEND_URL}" \
   ${imageTag}
 
 # 상태 확인
 docker ps -f name=be4man_app --format "table {{.ID}}\t{{.Image}}\t{{.Status}}"
 
 ENDSSH
-                            """
-                        }
-                    }
+                    """
                 }
             }
         }
+    }
+}
+
     }
 
     post {
