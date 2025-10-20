@@ -23,6 +23,7 @@ out/
 
 ### AI ###
 GEMINI.md
+.cursor
 
 # Mongo Explorer plugin
 .idea/**/mongoSettings.xml

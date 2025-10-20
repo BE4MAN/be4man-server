@@ -47,7 +47,7 @@ public class Project extends BaseEntity {
 
     @Builder
     public Project(Account manager, String name, String discordWebhookUrl,
-                   Boolean isRunning, String jenkinsIp) {
+            Boolean isRunning, String jenkinsIp) {
         this.manager = manager;
         this.name = name;
         this.discordWebhookUrl = discordWebhookUrl;

@@ -55,7 +55,7 @@ public class Ban extends BaseEntity {
 
     @Builder
     public Ban(Account account, LocalDateTime startedAt, LocalDateTime endedAt,
-               String title, String description, BanType type) {
+            String title, String description, BanType type) {
         this.account = account;
         this.startedAt = startedAt;
         this.endedAt = endedAt;

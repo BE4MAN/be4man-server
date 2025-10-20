@@ -92,11 +92,11 @@ public class Deployment extends BaseEntity {
 
     @Builder
     public Deployment(Project project, Account issuer, String title, String body,
-                      DeployStatus status, Integer prNumber, String prDescription,
-                      String branch, LocalDateTime scheduledAt, LocalDateTime scheduledToEndedAt,
-                      String gitRepositoryName, String gitRepositoryDefaultBranch,
-                      String gitRepositoryUrl, String relatedProject, Double riskScore,
-                      RiskLevel riskLevel, Long buildNumber) {
+            DeployStatus status, Integer prNumber, String prDescription,
+            String branch, LocalDateTime scheduledAt, LocalDateTime scheduledToEndedAt,
+            String gitRepositoryName, String gitRepositoryDefaultBranch,
+            String gitRepositoryUrl, String relatedProject, Double riskScore,
+            RiskLevel riskLevel, Long buildNumber) {
         this.project = project;
         this.issuer = issuer;
         this.title = title;
