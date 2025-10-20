@@ -2,6 +2,9 @@ package sys.be4man.global.exception.type;
 
 import lombok.RequiredArgsConstructor;
 
+/**
+ * 공통 예외 타입
+ */
 @RequiredArgsConstructor
 public enum CommonExceptionType implements ExceptionType {
     BAD_REQUEST("잘못된 요청입니다"),
@@ -11,6 +14,11 @@ public enum CommonExceptionType implements ExceptionType {
     CONFLICT("요청이 충돌합니다");
 
     private final String message;
+
+    @Override
+    public String getName() {
+        return name();
+    }
 
     @Override
     public String getMessage() {
