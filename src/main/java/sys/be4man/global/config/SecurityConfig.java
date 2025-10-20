@@ -29,6 +29,35 @@ public class SecurityConfig {
     private final CustomOAuth2UserService customOAuth2UserService;
     private final OAuth2SuccessHandler oAuth2SuccessHandler;
 
+    public static final String[] WHITE_LIST = {
+            // 헬스 체크
+            "/api/health",
+
+            // Swagger UI
+            "/api-docs/**",
+            "/v3/api-docs/**",
+            "/swagger-ui/**",
+            "/swagger-ui.html",
+            "/swagger-ui/index.html",
+            "/swagger-resources/**",
+            "/webjars/**",
+
+            // H2 Console (개발 환경)
+            "/h2-console/**",
+
+            // OAuth2 관련 경로
+            "/oauth/**",
+            "/login/oauth2/**",
+
+            // 인증 API (인증 불필요)
+            "/api/auth/signup",
+            "/api/auth/signin",
+            "/api/auth/refresh",
+
+            // 공개 API
+            "/public/**"
+    };
+
     /**
      * Security Filter Chain 설정 JWT 인증 필터를 추가하고, 경로별 접근 권한을 설정합니다.
      */
@@ -72,38 +101,12 @@ public class SecurityConfig {
 
                 // 경로별 접근 권한 설정
                 .authorizeHttpRequests(auth -> auth
-                        // 공개 경로: 인증 없이 접근 가능
-                        .requestMatchers(
-                                // 헬스 체크
-                                "/api/health",
+                                               // 공개 경로: 인증 없이 접근 가능
+                                               // TODO: 구현 후 WHITE_LIST 적용
+                                               .anyRequest().permitAll()
 
-                                // Swagger UI
-                                "/api-docs/**",
-                                "/v3/api-docs/**",
-                                "/swagger-ui/**",
-                                "/swagger-ui.html",
-                                "/swagger-ui/index.html",
-                                "/swagger-resources/**",
-                                "/webjars/**",
-
-                                // H2 Console (개발 환경)
-                                "/h2-console/**",
-
-                                // OAuth2 관련 경로
-                                "/oauth/**",
-                                "/login/oauth2/**",
-
-                                // 인증 API (인증 불필요)
-                                "/api/auth/signup",
-                                "/api/auth/signin",
-                                "/api/auth/refresh",
-
-                                // 공개 API
-                                "/public/**"
-                        ).permitAll()
-
-                        // 나머지 모든 요청은 인증 필요
-                        .anyRequest().authenticated()
+                                       // 나머지 모든 요청은 인증 필요
+//                        .anyRequest().authenticated()
                 );
 
         return http.build();
