@@ -36,7 +36,7 @@ spring:
   # Redis
   data:
     redis:
-      host: localhost
+      host: ${REDIS_HOST}
       port: 6379
 
   # OAuth2 설정
