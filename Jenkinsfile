@@ -61,35 +61,34 @@ pipeline {
                         string(credentialsId: 'frontend_url', variable: 'FRONTEND_URL')
                     ]) {
                         sshagent(credentials: [env.VM_SSH_CRED_ID]) {
-                            // Groovy가 env.*를 치환하도록 만든 후, heredoc으로 안전하게 SSH 명령 전달
                             def imageTag = "${env.DOCKER_IMAGE_NAME}:${env.BUILD_NUMBER}"
                             sh """
-                                ssh -o StrictHostKeyChecking=no ${env.VM_USER}@${env.VM_HOST_IP} /bin/bash << 'ENDSSH'
-                                set -e
-        
-                                # 1) 기존 컨테이너 중지 & 삭제 (실패해도 계속)
-                                docker stop be4man_app || true
-                                docker rm be4man_app || true
-        
-                                # 2) 이미지 pull
-                                docker pull ${imageTag}
-        
-                                # 3) 새 컨테이너 실행 (환경 변수에 값이 직접 들어감)
-                                docker run -d --name be4man_app -p 8080:8080 \\
-                                  -e DB_URL="${env.DB_URL}" \\
-                                  -e DB_USERNAME="${env.DB_USERNAME}" \\
-                                  -e DB_PASSWORD="${env.DB_PASSWORD}" \\
-                                  -e DB_SCHEMA="${env.DB_SCHEMA}" \\
-                                  -e GITHUB_CLIENT_ID="${env.GITHUB_CLIENT_ID}" \\
-                                  -e GITHUB_CLIENT_SECRET="${env.GITHUB_CLIENT_SECRET}" \\
-                                  -e JWT_SECRET="${env.JWT_SECRET}" \\
-                                  -e FRONTEND_URL="${env.FRONTEND_URL}" \\
-                                  ${imageTag}
-        
-                                # 간단한 상태 확인
-                                docker ps -f name=be4man_app --format "table {{.ID}}\t{{.Image}}\t{{.Status}}"
-        
-                                ENDSSH
+ssh -o StrictHostKeyChecking=no ${env.VM_USER}@${env.VM_HOST_IP} /bin/bash <<'ENDSSH'
+set -e
+
+# 1) 기존 컨테이너 중지 & 삭제 (실패해도 계속)
+docker stop be4man_app || true
+docker rm be4man_app || true
+
+# 2) 이미지 pull
+docker pull ${imageTag}
+
+# 3) 새 컨테이너 실행 (환경 변수에 값이 직접 들어감)
+docker run -d --name be4man_app -p 8080:8080 \\
+  -e DB_URL="${env.DB_URL}" \\
+  -e DB_USERNAME="${env.DB_USERNAME}" \\
+  -e DB_PASSWORD="${env.DB_PASSWORD}" \\
+  -e DB_SCHEMA="${env.DB_SCHEMA}" \\
+  -e GITHUB_CLIENT_ID="${env.GITHUB_CLIENT_ID}" \\
+  -e GITHUB_CLIENT_SECRET="${env.GITHUB_CLIENT_SECRET}" \\
+  -e JWT_SECRET="${env.JWT_SECRET}" \\
+  -e FRONTEND_URL="${env.FRONTEND_URL}" \\
+  ${imageTag}
+
+# 상태 확인
+docker ps -f name=be4man_app --format "table {{.ID}}\t{{.Image}}\t{{.Status}}"
+
+ENDSSH
                             """
                         }
                     }
