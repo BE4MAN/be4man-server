@@ -53,7 +53,11 @@ pipeline {
                   withCredentials([string(credentialsId: 'db_password', variable: 'DB_PASSWORD'),
                    string(credentialsId: 'db_url', variable: 'DB_URL'),
                    string(credentialsId: 'db_username', variable: 'DB_USERNAME'),
-                   string(credentialsId: 'db_schema', variable: 'DB_SCHEMA')]
+                   string(credentialsId: 'db_schema', variable: 'DB_SCHEMA'),
+                   string(credentialsId: 'github_client_id', variable: 'GITHUB_CLIENT_ID'),
+                   string(credentialsId: 'github_client_secret', variable: 'GITHUB_CLIENT_SECRET'),
+                   string(credentialsId: 'jwt_secret', variable: 'JWT_SECRET'),
+                   string(credentialsId: 'frontend_url', variable: 'FRONTEND_URL')]
                    ) {
                     sshagent(credentials: [env.VM_SSH_CRED_ID]) {
                         sh """
@@ -75,6 +79,11 @@ pipeline {
                                 -e DB_USERNAME="${DB_USERNAME}" \\
                                 -e DB_PASSWORD="${DB_PASSWORD}" \\
                                 -e DB_SCHEMA="${DB_SCHEMA}" \\
+                                -e GITHUB_CLIENT_ID="${GITHUB_CLIENT_ID}" \\
+                                -e GITHUB_CLIENT_SECRET="${GITHUB_CLIENT_SECRET}" \\
+                                -e JWT_SECRET="${JWT_SECRET}" \\
+                                -e FRONTEND_URL="${FRONTEND_URL}" \\
+
                                 ${env.DOCKER_IMAGE_NAME}:${env.BUILD_NUMBER}
                             '
                         """
