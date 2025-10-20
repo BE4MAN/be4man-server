@@ -24,6 +24,7 @@ import sys.be4man.domains.auth.dto.request.SigninRequest;
 import sys.be4man.domains.auth.dto.request.SignupRequest;
 import sys.be4man.domains.auth.dto.response.AuthResponse;
 import sys.be4man.domains.auth.service.AuthService;
+import sys.be4man.global.dto.response.ErrorResponse;
 
 /**
  * 인증 관련 API 컨트롤러
@@ -48,9 +49,9 @@ public class AuthController {
             @ApiResponse(responseCode = "200", description = "회원가입 성공",
                     content = @Content(schema = @Schema(implementation = AuthResponse.class))),
             @ApiResponse(responseCode = "401", description = "유효하지 않은 SignToken",
-                    content = @Content),
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
             @ApiResponse(responseCode = "409", description = "이미 가입된 계정",
-                    content = @Content)
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
     @PostMapping("/signup")
     public ResponseEntity<AuthResponse> signup(
@@ -85,9 +86,9 @@ public class AuthController {
             @ApiResponse(responseCode = "200", description = "로그인 성공",
                     content = @Content(schema = @Schema(implementation = AuthResponse.class))),
             @ApiResponse(responseCode = "401", description = "유효하지 않거나 만료된 임시 코드",
-                    content = @Content),
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
             @ApiResponse(responseCode = "404", description = "계정을 찾을 수 없음",
-                    content = @Content)
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
     @PostMapping("/signin")
     public ResponseEntity<AuthResponse> signin(
@@ -112,9 +113,9 @@ public class AuthController {
             @ApiResponse(responseCode = "200", description = "토큰 갱신 성공",
                     content = @Content(schema = @Schema(implementation = AuthResponse.class))),
             @ApiResponse(responseCode = "401", description = "유효하지 않거나 만료된 Refresh Token",
-                    content = @Content),
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
             @ApiResponse(responseCode = "404", description = "계정을 찾을 수 없음",
-                    content = @Content)
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
     @PostMapping("/refresh")
     public ResponseEntity<AuthResponse> refresh(
@@ -139,7 +140,7 @@ public class AuthController {
             @ApiResponse(responseCode = "200", description = "로그아웃 성공",
                     content = @Content(schema = @Schema(implementation = String.class))),
             @ApiResponse(responseCode = "401", description = "인증되지 않은 사용자",
-                    content = @Content)
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
     @SecurityRequirement(name = "Bearer Authentication")
     @PostMapping("/logout")

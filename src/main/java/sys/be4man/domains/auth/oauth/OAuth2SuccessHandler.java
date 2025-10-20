@@ -26,11 +26,8 @@ import sys.be4man.domains.auth.service.SignTokenRedisService;
 /**
  * OAuth2 로그인 성공 후 처리하는 핸들러
  * <p>
- * Flow:
- * 1. GitHub에서 사용자 정보 추출
- * 2. DB에서 계정 조회 (githubId 기준)
- * 3-a. 계정 존재: Temporary Code 발급 → /signin API
- * 3-b. 계정 없음: SignToken 발급 → /signup API
+ * Flow: 1. GitHub에서 사용자 정보 추출 2. DB에서 계정 조회 (githubId 기준) 3-a. 계정 존재: Temporary Code 발급 → /signin
+ * API 3-b. 계정 없음: SignToken 발급 → /signup API
  */
 @Slf4j
 @Component
@@ -53,7 +50,9 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
             String email,
             String githubAccessToken,
             String profileImageUrl
-    ) {}
+    ) {
+
+    }
 
     @Override
     @Transactional
@@ -88,16 +87,14 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
                 .map(id -> ((Number) id).longValue())
                 .orElseThrow(() -> new IllegalStateException("GitHub ID를 가져올 수 없습니다"));
 
-        String email = Optional.ofNullable((String) attributes.get("email"))
-                .orElseThrow(() -> new IllegalStateException("GitHub 이메일을 가져올 수 없습니다"));
+        String email = (String) attributes.get("email");
 
         String githubAccessToken = Optional.ofNullable((String) attributes.get("githubAccessToken"))
                 .orElseThrow(() -> new IllegalStateException("GitHub Access Token을 가져올 수 없습니다"));
 
         String profileImageUrl = (String) attributes.get("avatar_url");
 
-        log.info("GitHub 정보 추출 완료 - githubId: {}, email: {}", githubId, email);
-
+        log.info("GitHub 정보 추출 완료 - githubId: {}", githubId);
         return new GitHubUserInfo(githubId, email, githubAccessToken, profileImageUrl);
     }
 
@@ -105,7 +102,7 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
      * 기존 사용자 처리: Temporary Code 발급
      */
     private String handleExistingAccount(Account account, GitHubUserInfo userInfo) {
-        log.info("기존 계정 발견 - accountId: {}, githubId: {}", 
+        log.info("기존 계정 발견 - accountId: {}, githubId: {}",
                  account.getId(), userInfo.githubId());
 
         // GitHub Access Token 업데이트

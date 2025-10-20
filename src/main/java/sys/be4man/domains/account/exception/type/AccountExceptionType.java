@@ -14,6 +14,10 @@ public enum AccountExceptionType implements ExceptionType {
     private final String message;
 
     @Override
+    public String getName() {
+        return name();
+    }
+
     public String getMessage() {
         return message;
     }
