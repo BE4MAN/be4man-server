@@ -1,4 +1,3 @@
-// Jenkinsfile (최종 실행 코드)
 pipeline {
     agent any
 
@@ -15,6 +14,7 @@ pipeline {
         stage('Checkout') {
             steps {
                 echo "Checking out code..."
+                checkout scm
             }
         }
 
@@ -30,15 +30,14 @@ pipeline {
             steps {
                 script {
                     withCredentials([usernamePassword(credentialsId: env.DOCKER_CRED_ID,
-                                                    passwordVariable: 'DOCKER_PASS',
-                                                    usernameVariable: 'DOCKER_USER')]) {
+                                                      passwordVariable: 'DOCKER_PASS',
+                                                      usernameVariable: 'DOCKER_USER')]) {
 
                         def IMAGE_TAG = "${env.DOCKER_IMAGE_NAME}:${env.BUILD_NUMBER}"
 
                         sh "docker build -t ${IMAGE_TAG} ."
                         sh "echo ${DOCKER_PASS} | docker login -u ${DOCKER_USER} --password-stdin"
 
-                        // 네트워크 불안정 대비 재시도 로직 추가
                         retry(3) {
                             sh "docker push ${IMAGE_TAG}"
                         }
@@ -50,45 +49,93 @@ pipeline {
         stage('Deploy to VM') {
             steps {
                 script {
-                  withCredentials([string(credentialsId: 'db_password', variable: 'DB_PASSWORD'),
-                   string(credentialsId: 'db_url', variable: 'DB_URL'),
-                   string(credentialsId: 'db_username', variable: 'DB_USERNAME'),
-                   string(credentialsId: 'db_schema', variable: 'DB_SCHEMA'),
-                   string(credentialsId: 'github_client_id', variable: 'GITHUB_CLIENT_ID'),
-                   string(credentialsId: 'github_client_secret', variable: 'GITHUB_CLIENT_SECRET'),
-                   string(credentialsId: 'jwt_secret', variable: 'JWT_SECRET'),
-                   string(credentialsId: 'frontend_url', variable: 'FRONTEND_URL')]
-                   ) {
-                    sshagent(credentials: [env.VM_SSH_CRED_ID]) {
-                        sh """
-                            # Host Key 검사를 무시하고 SSH 접속 (-o StrictHostKeyChecking=no)
-                            ssh -o StrictHostKeyChecking=no ${env.VM_USER}@${env.VM_HOST_IP} '
+                    withCredentials([
+                        string(credentialsId: 'db_password', variable: 'DB_PASSWORD'),
+                        string(credentialsId: 'db_url', variable: 'DB_URL'),
+                        string(credentialsId: 'db_username', variable: 'DB_USERNAME'),
+                        string(credentialsId: 'db_schema', variable: 'DB_SCHEMA'),
+                        string(credentialsId: 'github_client_id', variable: 'GITHUB_CLIENT_ID'),
+                        string(credentialsId: 'github_client_secret', variable: 'GITHUB_CLIENT_SECRET'),
+                        string(credentialsId: 'jwt_secret', variable: 'JWT_SECRET'),
+                        string(credentialsId: 'frontend_url', variable: 'FRONTEND_URL')
+                    ]) {
+                        // 로컬 변수로 복사
+                        def vmUser = env.VM_USER
+                        def vmHost = env.VM_HOST_IP
+                        def imageTag = "${env.DOCKER_IMAGE_NAME}:${env.BUILD_NUMBER}"
+                        def dbUrl = env.DB_URL
+                        def dbUsername = env.DB_USERNAME
+                        def dbPassword = env.DB_PASSWORD
+                        def dbSchema = env.DB_SCHEMA
+                        def githubClientId = env.GITHUB_CLIENT_ID
+                        def githubClientSecret = env.GITHUB_CLIENT_SECRET
+                        def jwtSecret = env.JWT_SECRET
+                        def frontendUrl = env.FRONTEND_URL
 
-                                # 1. 기존 컨테이너 중지 및 삭제 (오류 무시: || true)
-                                docker stop be4man_app || true
-                                docker rm be4man_app || true
+                        sshagent(credentials: [env.VM_SSH_CRED_ID]) {
+                            // 원시(보간 없음) 문자열로 스크립트 작성 — ${} 사용 금지
+                            def raw = '''ssh -o StrictHostKeyChecking=no __VMUSER__@__VMHOST__ /bin/bash <<'ENDSSH'
+set -e
 
-                                # 2. Docker Hub에서 새 이미지 Pull
-                                docker pull ${env.DOCKER_IMAGE_NAME}:${env.BUILD_NUMBER}
+# 네트워크 생성 (있으면 무시)
+docker network create be4man-network || true
 
-                                # 3. 새 컨테이너 실행 (환경 변수 주입)
-                                docker run -d \\
-                                --name be4man_app \\
-                                -p 8080:8080 \\
-                                -e DB_URL="${DB_URL}" \\
-                                -e DB_USERNAME="${DB_USERNAME}" \\
-                                -e DB_PASSWORD="${DB_PASSWORD}" \\
-                                -e DB_SCHEMA="${DB_SCHEMA}" \\
-                                -e GITHUB_CLIENT_ID="${GITHUB_CLIENT_ID}" \\
-                                -e GITHUB_CLIENT_SECRET="${GITHUB_CLIENT_SECRET}" \\
-                                -e JWT_SECRET="${JWT_SECRET}" \\
-                                -e FRONTEND_URL="${FRONTEND_URL}" \\
+# Redis 준비 (없으면 생성, 있으면 시작)
+if ! docker inspect my-redis >/dev/null 2>&1; then
+  echo "Redis container not found. Creating my-redis..."
+  docker run -d --name my-redis --network be4man-network redis
+else
+  if [ "$(docker inspect -f '{{.State.Running}}' my-redis)" != "true" ]; then
+    docker start my-redis
+  fi
+fi
 
-                                ${env.DOCKER_IMAGE_NAME}:${env.BUILD_NUMBER}
-                            '
-                        """
+# 기존 앱 컨테이너 중지 및 삭제
+docker stop be4man_app || true
+docker rm be4man_app || true
+
+# 이미지 pull
+docker pull __IMAGE_TAG__
+
+# 앱 컨테이너 실행 (옵션 -> IMAGE 순서)
+docker run -d --name be4man_app -p 8080:8080 --network be4man-network \
+  -e DB_URL="__DB_URL__" \
+  -e DB_USERNAME="__DB_USERNAME__" \
+  -e DB_PASSWORD="__DB_PASSWORD__" \
+  -e DB_SCHEMA="__DB_SCHEMA__" \
+  -e GITHUB_CLIENT_ID="__GITHUB_CLIENT_ID__" \
+  -e GITHUB_CLIENT_SECRET="__GITHUB_CLIENT_SECRET__" \
+  -e JWT_SECRET="__JWT_SECRET__" \
+  -e FRONTEND_URL="__FRONTEND_URL__" \
+  -e REDIS_HOST="my-redis" \
+  -e REDIS_PORT="6379" \
+  __IMAGE_TAG__
+
+# 상태 확인 및 로그 일부 출력
+docker ps -f name=be4man_app --format "table {{.ID}}\t{{.Image}}\t{{.Status}}"
+sleep 5
+docker logs --tail 50 be4man_app || true
+
+ENDSSH
+'''
+                            // 필요한 값들만 치환 (안전하게)
+                            def remoteScript = raw
+                                .replace('__VMUSER__', vmUser)
+                                .replace('__VMHOST__', vmHost)
+                                .replace(/__IMAGE_TAG__/, imageTag)
+                                .replace(/__DB_URL__/, dbUrl)
+                                .replace(/__DB_USERNAME__/, dbUsername)
+                                .replace(/__DB_PASSWORD__/, dbPassword)
+                                .replace(/__DB_SCHEMA__/, dbSchema)
+                                .replace(/__GITHUB_CLIENT_ID__/, githubClientId)
+                                .replace(/__GITHUB_CLIENT_SECRET__/, githubClientSecret)
+                                .replace(/__JWT_SECRET__/, jwtSecret)
+                                .replace(/__FRONTEND_URL__/, frontendUrl)
+
+                            // 실행
+                            sh remoteScript
+                        }
                     }
-                  }
                 }
             }
         }
