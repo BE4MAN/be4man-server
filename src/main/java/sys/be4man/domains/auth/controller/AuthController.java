@@ -153,4 +153,9 @@ public class AuthController {
 
         return ResponseEntity.ok("로그아웃이 완료되었습니다");
     }
+    
+    @GetMapping("/")
+    public String checkStatus() {
+        return "API Server is running.";
+    }
 }
