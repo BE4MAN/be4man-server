@@ -74,7 +74,7 @@ docker rm be4man_app || true
 docker pull ${imageTag}
 
 # 3) 새 컨테이너 실행 (환경 변수에 값이 직접 들어감)
-docker run -d --name be4man_app -p 8080:8080 \\
+docker run -d --name be4man_app -p 8080:8080 --network be4man-network yoonyn/be4man-server \\
   -e DB_URL="${env.DB_URL}" \\
   -e DB_USERNAME="${env.DB_USERNAME}" \\
   -e DB_PASSWORD="${env.DB_PASSWORD}" \\
