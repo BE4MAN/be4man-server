@@ -13,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -25,7 +26,6 @@ import sys.be4man.domains.auth.dto.request.SignupRequest;
 import sys.be4man.domains.auth.dto.response.AuthResponse;
 import sys.be4man.domains.auth.service.AuthService;
 import sys.be4man.global.dto.response.ErrorResponse;
-import org.springframework.web.bind.annotation.GetMapping;
 
 /**
  * 인증 관련 API 컨트롤러
@@ -76,8 +76,7 @@ public class AuthController {
     }
 
     /**
-     * 로그인 (기존 사용자)
-     * OAuth 인증 후 발급된 임시 코드로 토큰 발급
+     * 로그인 (기존 사용자) OAuth 인증 후 발급된 임시 코드로 토큰 발급
      *
      * @param request 임시 코드
      * @return Access Token + Refresh Token
@@ -103,8 +102,7 @@ public class AuthController {
     }
 
     /**
-     * 토큰 갱신
-     * Refresh Token으로 새로운 Access Token 및 Refresh Token 발급
+     * 토큰 갱신 Refresh Token으로 새로운 Access Token 및 Refresh Token 발급
      *
      * @param request Refresh Token
      * @return 새로운 Access Token + Refresh Token
@@ -130,8 +128,7 @@ public class AuthController {
     }
 
     /**
-     * 로그아웃
-     * Redis에서 Refresh Token을 삭제하여 로그아웃합니다.
+     * 로그아웃 Redis에서 Refresh Token을 삭제하여 로그아웃합니다.
      *
      * @param principal 현재 로그인한 사용자 정보
      * @return 성공 메시지
@@ -154,7 +151,7 @@ public class AuthController {
 
         return ResponseEntity.ok("로그아웃이 완료되었습니다");
     }
-    
+
     @GetMapping("/")
     public String checkStatus() {
         return "API Server is running.";
