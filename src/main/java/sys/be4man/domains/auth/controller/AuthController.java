@@ -25,6 +25,7 @@ import sys.be4man.domains.auth.dto.request.SignupRequest;
 import sys.be4man.domains.auth.dto.response.AuthResponse;
 import sys.be4man.domains.auth.service.AuthService;
 import sys.be4man.global.dto.response.ErrorResponse;
+import org.springframework.web.bind.annotation.GetMapping;
 
 /**
  * 인증 관련 API 컨트롤러
@@ -152,5 +153,10 @@ public class AuthController {
         authService.logout(principal.accountId());
 
         return ResponseEntity.ok("로그아웃이 완료되었습니다");
+    }
+    
+    @GetMapping("/")
+    public String checkStatus() {
+        return "API Server is running.";
     }
 }
