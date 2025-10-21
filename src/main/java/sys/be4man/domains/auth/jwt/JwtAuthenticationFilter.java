@@ -122,7 +122,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
      * @return UsernamePasswordAuthenticationToken
      */
     private UsernamePasswordAuthenticationToken createAuthentication(AccountPrincipal principal) {
-        SimpleGrantedAuthority authority = 
+        SimpleGrantedAuthority authority =
                 new SimpleGrantedAuthority("ROLE_" + principal.role().name());
 
         return new UsernamePasswordAuthenticationToken(
