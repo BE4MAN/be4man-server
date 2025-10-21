@@ -5,8 +5,7 @@ import org.springframework.http.HttpStatus;
 import sys.be4man.global.exception.type.ExceptionType;
 
 /**
- * 커스텀 예외 기본 클래스
- * 모든 도메인별 예외는 이 클래스를 상속해야 합니다.
+ * 커스텀 예외 기본 클래스 모든 도메인별 예외는 이 클래스를 상속해야 합니다.
  */
 @Getter
 public abstract class BaseException extends RuntimeException {
