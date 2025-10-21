@@ -18,63 +18,15 @@ import java.time.format.DateTimeFormatter;
 @Builder
 public class HistoryResponseDto {
 
-    /**
-     * 배포 ID
-     */
     private Long id;
-
-    /**
-     * PR 번호
-     * 예: 201, 247, 246
-     */
     private Integer prNumber;
-
-    /**
-     * 브랜치명
-     * 예: "feature/ui-update", "feature/auth-improvements"
-     */
     private String branch;
-
-    /**
-     * 승인 여부 (한글)
-     * - "승인대기중" (PENDING)
-     * - "승인완료" (APPROVED)
-     * - "반려" (REJECTED)
-     * - "취소" (CANCELED)
-     * - "배포" (SUCCESS, FAILURE인 경우)
-     */
     private String approvalStatus;
-
-    /**
-     * 배포 시간 (포맷된 문자열)
-     * 예: "2025.07.25 17:15"
-     */
     private String deployTime;
-
-    /**
-     * 결과
-     * - "성공" (SUCCESS)
-     * - "실패" (FAILURE)
-     * - "-" (나머지 상태)
-     */
     private String result;
-
-
-    /**
-     * 원본 상태 (enum)
-     * - 프론트엔드에서 조건 분기 시 사용
-     */
     private DeployStatus status;
-
-    /**
-     * 생성 시간 (원본)
-     * - 프론트엔드에서 추가 가공 시 사용
-     */
     private LocalDateTime createdAt;
 
-    /**
-     * Entity → DTO 변환 생성자
-     */
     public HistoryResponseDto(Deployment deployment) {
         this.id = deployment.getId();
         this.prNumber = deployment.getPrNumber();

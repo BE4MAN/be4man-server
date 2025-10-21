@@ -15,42 +15,11 @@ import java.time.LocalDate;
 @AllArgsConstructor
 @Builder
 public class HistorySearchRequestDto {
-
-    /**
-     * 상태 필터
-     * - PENDING, APPROVED, SUCCESS, FAILURE 등
-     */
     private DeployStatus status;
-
-    /**
-     * 프로젝트 ID 필터
-     */
     private Long projectId;
-
-    /**
-     * 시작 날짜
-     */
     private LocalDate startDate;
-
-    /**
-     * 종료 날짜
-     */
     private LocalDate endDate;
-
-    /**
-     * PR 번호 검색
-     */
     private Integer prNumber;
-
-    /**
-     * 브랜치명 검색 (부분 일치)
-     */
     private String branch;
-
-    /**
-     * 정렬 기준 (선택)
-     * - "latest": 최신순 (기본값)
-     * - "oldest": 오래된 순
-     */
     private String sortBy;
 }

@@ -16,39 +16,12 @@ import java.util.List;
 @Builder
 public class HistoryPageResponseDto {
 
-    /**
-     * 실제 데이터 목록
-     */
     private List<HistoryResponseDto> content;
-
-    /**
-     * 현재 페이지 번호 (0부터 시작)
-     */
     private int currentPage;
-
-    /**
-     * 페이지 크기
-     */
     private int pageSize;
-
-    /**
-     * 전체 페이지 수
-     */
     private int totalPages;
-
-    /**
-     * 전체 요소 수
-     */
     private long totalElements;
-
-    /**
-     * 첫 페이지 여부
-     */
     private boolean first;
-
-    /**
-     * 마지막 페이지 여부
-     */
     private boolean last;
 
     /**
