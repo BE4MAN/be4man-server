@@ -47,6 +47,7 @@ public class SecurityConfig {
 
             // OAuth2 관련 경로
             "/oauth/**",
+            "/oauth2/**",
             "/login/oauth2/**",
 
             // 인증 API (인증 불필요)
