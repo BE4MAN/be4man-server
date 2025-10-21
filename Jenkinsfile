@@ -57,7 +57,8 @@ pipeline {
                         string(credentialsId: 'github_client_id', variable: 'GITHUB_CLIENT_ID'),
                         string(credentialsId: 'github_client_secret', variable: 'GITHUB_CLIENT_SECRET'),
                         string(credentialsId: 'jwt_secret', variable: 'JWT_SECRET'),
-                        string(credentialsId: 'frontend_url', variable: 'FRONTEND_URL')
+                        string(credentialsId: 'frontend_url', variable: 'FRONTEND_URL'),
+                        string(credentialsId: 'backend_url', variable: 'BACKEND_URL')
                     ]) {
                         // 로컬 변수로 복사
                         def vmUser = env.VM_USER
@@ -71,6 +72,7 @@ pipeline {
                         def githubClientSecret = env.GITHUB_CLIENT_SECRET
                         def jwtSecret = env.JWT_SECRET
                         def frontendUrl = env.FRONTEND_URL
+                        def backendUrl = env.BACKEND_URL
 
                         sshagent(credentials: [env.VM_SSH_CRED_ID]) {
                             // 원시(보간 없음) 문자열로 스크립트 작성 — ${} 사용 금지
@@ -109,6 +111,7 @@ docker run -d --name be4man_app -p 8080:8080 --network be4man-network \
   -e FRONTEND_URL="__FRONTEND_URL__" \
   -e REDIS_HOST="my-redis" \
   -e REDIS_PORT="6379" \
+  -e BACKEND_URL="__BACKEND_URL__" \
   __IMAGE_TAG__
 
 # 상태 확인 및 로그 일부 출력
@@ -131,6 +134,7 @@ ENDSSH
                                 .replace(/__GITHUB_CLIENT_SECRET__/, githubClientSecret)
                                 .replace(/__JWT_SECRET__/, jwtSecret)
                                 .replace(/__FRONTEND_URL__/, frontendUrl)
+                                .replace(/__BackEND_URL__/, backendUrl)
 
                             // 실행
                             sh remoteScript
