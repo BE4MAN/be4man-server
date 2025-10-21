@@ -31,6 +31,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
      */
     private static final List<String> EXCLUDE_PATHS = Arrays.asList(
             "/oauth",
+            "/oauth2",
+            "/login/oauth2",
             "/public",
             "/swagger-ui",
             "/v3/api-docs",
@@ -38,7 +40,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             "/swagger-resources",
             "/webjars",
             "/api/health",
-            "/h2-console"
+            "/h2-console",
+            "/api/auth/signup",
+            "/api/auth/signin",
+            "/api/auth/refresh"
     );
 
     /**
@@ -105,6 +110,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private void setAuthenticationToContext(HttpServletRequest request, String token) {
         Long accountId = jwtProvider.getAccountIdFromToken(token);
         Role role = jwtProvider.getRoleFromToken(token);
+
+        // Role이 null이면 SignToken 등 인증용이 아닌 토큰이므로 인증 설정 건너뜀
+        if (role == null) {
+            return;
+        }
 
         AccountPrincipal principal = new AccountPrincipal(accountId, role);
         UsernamePasswordAuthenticationToken authentication = createAuthentication(principal);
