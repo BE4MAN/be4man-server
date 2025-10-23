@@ -129,6 +129,9 @@ public class JwtProvider {
      */
     public Role getRoleFromToken(String token) {
         String roleName = getClaims(token).get("role", String.class);
+        if (roleName == null) {
+            return null;  // SignToken 등 Role이 없는 토큰의 경우 null 반환
+        }
         return Role.valueOf(roleName);
     }
 
