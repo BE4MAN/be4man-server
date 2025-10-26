@@ -17,9 +17,11 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import sys.be4man.domains.account.model.entity.Account;
-import sys.be4man.domains.deployment.model.type.DeployStatus;
+import sys.be4man.domains.deployment.model.type.DeploymentStatus;
+import sys.be4man.domains.deployment.model.type.DeploymentType;
 import sys.be4man.domains.deployment.model.type.RiskLevel;
 import sys.be4man.domains.project.model.entity.Project;
+import sys.be4man.domains.pullrequest.model.entity.PullRequest;
 import sys.be4man.global.model.entity.BaseEntity;
 
 /**
@@ -43,24 +45,26 @@ public class Deployment extends BaseEntity {
     @JoinColumn(name = "issuer_id", nullable = false)
     private Account issuer;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "pull_request_id", nullable = false)
+    private PullRequest pullRequest;
+
     @Column(name = "title", nullable = false)
     private String title;
 
-    @Column(name = "body", columnDefinition = "TEXT", nullable = false)
-    private String body;
+    @Column(name = "content", columnDefinition = "TEXT", nullable = false)
+    private String content;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "type", nullable = false)
+    private DeploymentType type;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
-    private DeployStatus status;
+    private DeploymentStatus status;
 
-    @Column(name = "pr_number", nullable = false)
-    private Integer prNumber;
-
-    @Column(name = "pr_description", columnDefinition = "TEXT", nullable = false)
-    private String prDescription;
-
-    @Column(name = "branch", nullable = false)
-    private String branch;
+    @Column(name = "is_deployed")
+    private Boolean isDeployed;
 
     @Column(name = "scheduled_at")
     private LocalDateTime scheduledAt;
@@ -68,67 +72,61 @@ public class Deployment extends BaseEntity {
     @Column(name = "scheduled_to_ended_at")
     private LocalDateTime scheduledToEndedAt;
 
-    @Column(name = "git_repository_name", nullable = false)
-    private String gitRepositoryName;
-
-    @Column(name = "git_repository_default_branch", nullable = false)
-    private String gitRepositoryDefaultBranch;
-
-    @Column(name = "git_repository_url", columnDefinition = "TEXT", nullable = false)
-    private String gitRepositoryUrl;
-
-    @Column(name = "related_project", columnDefinition = "TEXT")
-    private String relatedProject;
-
-    @Column(name = "risk_score", nullable = false)
-    private Double riskScore;
-
     @Enumerated(EnumType.STRING)
     @Column(name = "risk_level", nullable = false)
     private RiskLevel riskLevel;
 
-    @Column(name = "build_number")
-    private Long buildNumber;
+    @Column(name = "risk_description", columnDefinition = "TEXT")
+    private String riskDescription;
+
+    @Column(name = "expected_duration")
+    private String expectedDuration;
+
+    @Column(name = "version", columnDefinition = "TEXT")
+    private String version;
+
+    @Column(name = "strategy")
+    private String strategy;
 
     @Builder
-    public Deployment(Project project, Account issuer, String title, String body,
-            DeployStatus status, Integer prNumber, String prDescription,
-            String branch, LocalDateTime scheduledAt, LocalDateTime scheduledToEndedAt,
-            String gitRepositoryName, String gitRepositoryDefaultBranch,
-            String gitRepositoryUrl, String relatedProject, Double riskScore,
-            RiskLevel riskLevel, Long buildNumber) {
+    public Deployment(
+            Project project, Account issuer, PullRequest pullRequest,
+            String title, String content, DeploymentType type,
+            DeploymentStatus status, RiskLevel riskLevel, String expectedDuration,
+            Boolean isDeployed, LocalDateTime scheduledAt, LocalDateTime scheduledToEndedAt,
+            String riskDescription, String version, String strategy
+    ) {
         this.project = project;
         this.issuer = issuer;
+        this.pullRequest = pullRequest;
         this.title = title;
-        this.body = body;
+        this.content = content;
+        this.type = type;
         this.status = status;
-        this.prNumber = prNumber;
-        this.prDescription = prDescription;
-        this.branch = branch;
+        this.riskLevel = riskLevel;
+        this.expectedDuration = expectedDuration;
+        this.isDeployed = isDeployed;
         this.scheduledAt = scheduledAt;
         this.scheduledToEndedAt = scheduledToEndedAt;
-        this.gitRepositoryName = gitRepositoryName;
-        this.gitRepositoryDefaultBranch = gitRepositoryDefaultBranch;
-        this.gitRepositoryUrl = gitRepositoryUrl;
-        this.relatedProject = relatedProject;
-        this.riskScore = riskScore;
-        this.riskLevel = riskLevel;
-        this.buildNumber = buildNumber;
+        this.riskDescription = riskDescription;
+        this.version = version;
+        this.strategy = strategy;
     }
 
     /**
-     * 배포 상태 업데이트
+     * 배포 성공 여부 업데이트
      */
-    public void updateStatus(DeployStatus status) {
+    public void updateIsDeployed(boolean isDeployed) {
+        this.isDeployed = isDeployed;
+    }
+
+    /**
+     * 배포 작업 상태 업데이트
+     */
+    public void updateStatus(DeploymentStatus status) {
         this.status = status;
     }
 
-    /**
-     * 빌드 번호 업데이트
-     */
-    public void updateBuildNumber(Long buildNumber) {
-        this.buildNumber = buildNumber;
-    }
 }
 
 

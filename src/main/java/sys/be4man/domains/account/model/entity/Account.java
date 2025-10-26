@@ -41,7 +41,7 @@ public class Account extends BaseEntity {
     private Role role;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "position", nullable = false, length = 20)
+    @Column(name = "position", nullable = false, length = 40)
     private JobPosition position;
 
     @Enumerated(EnumType.STRING)
