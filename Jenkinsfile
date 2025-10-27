@@ -59,7 +59,9 @@ pipeline {
                         string(credentialsId: 'jwt_secret', variable: 'JWT_SECRET'),
                         string(credentialsId: 'frontend_url', variable: 'FRONTEND_URL'),
                         string(credentialsId: 'backend_url', variable: 'BACKEND_URL'),
-                        string(credentialsId: 'github_redirect_url', variable: 'GITHUB_REDIRECT_URL')
+                        string(credentialsId: 'github_redirect_url', variable: 'GITHUB_REDIRECT_URL'),
+                        string(credentialsId: 'jenkins_url', variable: 'JENKINS_URL'),
+                        string(credentialsId: 'jenkins_password', variable: 'JENKINS_PASSWORD')
                     ]) {
                         // 로컬 변수로 복사
                         def vmUser = env.VM_USER
@@ -75,6 +77,10 @@ pipeline {
                         def frontendUrl = env.FRONTEND_URL
                         def backendUrl = env.BACKEND_URL
                         def githubRedirectUrl = env.GITHUB_REDIRECT_URL
+                        def jenkinsUrl = env.JENKINS_URL
+                        def jenkinsPassword = env.JENKINS_PASSWORD
+
+
 
 
                         sshagent(credentials: [env.VM_SSH_CRED_ID]) {
@@ -116,6 +122,8 @@ docker run -d --name be4man_app -p 8080:8080 --network be4man-network \
   -e REDIS_PORT="6379" \
   -e BACKEND_URL="__BACKEND_URL__" \
   -e GITHUB_REDIRECT_URL="__GITHUB_REDIRECT_URL__" \
+  -e JENKINS_URL="__JENKINS_URL__" \
+  -e JENKINS_PASSWORD="__JENKINS_PASSWORD__" \
   __IMAGE_TAG__
 
 # 상태 확인 및 로그 일부 출력
@@ -140,6 +148,8 @@ ENDSSH
                                 .replace(/__FRONTEND_URL__/, frontendUrl)
                                 .replace(/__BACKEND_URL__/, backendUrl)
                                 .replace(/__GITHUB_REDIRECT_URL__/, githubRedirectUrl)
+                                .replace(/__JENKINS_URL__/, jenkinsUrl)
+                                .replace(/__JENKINS_PASSWORD__/, jenkinsPassword)
 
                             // 실행
                             sh remoteScript
