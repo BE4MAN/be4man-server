@@ -41,11 +41,11 @@ public class Account extends BaseEntity {
     private Role role;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "position", nullable = false, length = 40)
+    @Column(name = "position", nullable = false, length = 52)
     private JobPosition position;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "department", nullable = false, length = 20)
+    @Column(name = "department", nullable = false, length = 52)
     private JobDepartment department;
 
     @Column(name = "profile_image_url", length = 512)
