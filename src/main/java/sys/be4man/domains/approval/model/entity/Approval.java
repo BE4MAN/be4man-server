@@ -2,6 +2,8 @@ package sys.be4man.domains.approval.model.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -14,6 +16,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import sys.be4man.domains.account.model.entity.Account;
+import sys.be4man.domains.approval.model.type.ApprovalType;
 import sys.be4man.domains.deployment.model.entity.Deployment;
 import sys.be4man.global.model.entity.BaseEntity;
 
@@ -44,12 +47,18 @@ public class Approval extends BaseEntity {
     @Column(name = "comment", length = 255)
     private String comment;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name="type")
+    private ApprovalType type;
+
     @Builder
-    public Approval(Account reviewer, Deployment deployment, Boolean isApproved, String comment) {
+    public Approval(Account reviewer, Deployment deployment, Boolean isApproved,
+            String comment, ApprovalType type) {
         this.reviewer = reviewer;
         this.deployment = deployment;
         this.isApproved = isApproved;
         this.comment = comment;
+        this.type = type;
     }
 
     /**

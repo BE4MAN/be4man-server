@@ -1,4 +1,4 @@
-package sys.be4man.domains.deploymentlog.model.entity;
+package sys.be4man.domains.analysis.model.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -37,11 +37,14 @@ public class DeploymentLog extends BaseEntity {
     @Column(name = "jenkins_job_name", nullable = false)
     private String jenkinsJobName;
 
+    @Column(name = "build_number", nullable = false)
+    private long buildNumber;
+
     @Column(name = "log", columnDefinition = "TEXT", nullable = false)
     private String log;
 
     @Column(name = "duration", nullable = false)
-    private Integer duration;
+    private Long duration;
 
     @Column(name = "started_at", nullable = false)
     private LocalDateTime startedAt;
@@ -50,10 +53,11 @@ public class DeploymentLog extends BaseEntity {
     private LocalDateTime endedAt;
 
     @Builder
-    public DeploymentLog(Deployment deployment, String jenkinsJobName, String log,
-            Integer duration, LocalDateTime startedAt, LocalDateTime endedAt) {
+    public DeploymentLog(Deployment deployment, String jenkinsJobName, Long buildNumber,
+            String log, Long duration, LocalDateTime startedAt, LocalDateTime endedAt) {
         this.deployment = deployment;
         this.jenkinsJobName = jenkinsJobName;
+        this.buildNumber = buildNumber;
         this.log = log;
         this.duration = duration;
         this.startedAt = startedAt;
@@ -67,10 +71,4 @@ public class DeploymentLog extends BaseEntity {
         this.log = log;
     }
 
-    /**
-     * 종료 시간 업데이트
-     */
-    public void updateEndedAt(LocalDateTime endedAt) {
-        this.endedAt = endedAt;
-    }
 }
