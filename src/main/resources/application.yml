@@ -96,3 +96,13 @@ springdoc:
     path: /swagger-ui.html
   api-docs:
     path: /api-docs
+
+jenkins:
+  url: ${JENKINS_URL}
+  username: "be4man"
+  password: ${JENKINS_PASSWORD}
+
+gemini:
+  api:
+    key:
+      ${GEMINI_API_KEY}
