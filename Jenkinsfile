@@ -61,7 +61,9 @@ pipeline {
                         string(credentialsId: 'backend_url', variable: 'BACKEND_URL'),
                         string(credentialsId: 'github_redirect_url', variable: 'GITHUB_REDIRECT_URL'),
                         string(credentialsId: 'jenkins_url', variable: 'JENKINS_URL'),
-                        string(credentialsId: 'jenkins_password', variable: 'JENKINS_PASSWORD')
+                        string(credentialsId: 'jenkins_password', variable: 'JENKINS_PASSWORD'),
+                        string(credentialsId: 'gemini_api_key', variable: 'GEMINI_API_KEY')
+
                     ]) {
                         // 로컬 변수로 복사
                         def vmUser = env.VM_USER
@@ -79,6 +81,7 @@ pipeline {
                         def githubRedirectUrl = env.GITHUB_REDIRECT_URL
                         def jenkinsUrl = env.JENKINS_URL
                         def jenkinsPassword = env.JENKINS_PASSWORD
+                        def geminiApiKey = env.GEMINI_API_KEY
 
 
 
@@ -124,6 +127,7 @@ docker run -d --name be4man_app -p 8080:8080 --network be4man-network \
   -e GITHUB_REDIRECT_URL="__GITHUB_REDIRECT_URL__" \
   -e JENKINS_URL="__JENKINS_URL__" \
   -e JENKINS_PASSWORD="__JENKINS_PASSWORD__" \
+  -e GEMINI_API_KEY="__GEMINI_API_KEY__" \
   __IMAGE_TAG__
 
 # 상태 확인 및 로그 일부 출력
@@ -150,6 +154,7 @@ ENDSSH
                                 .replace(/__GITHUB_REDIRECT_URL__/, githubRedirectUrl)
                                 .replace(/__JENKINS_URL__/, jenkinsUrl)
                                 .replace(/__JENKINS_PASSWORD__/, jenkinsPassword)
+                                .replace(/__GEMINI_API_KEY__/, geminiApiKey)
 
                             // 실행
                             sh remoteScript
