@@ -7,7 +7,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.time.LocalDateTime;
@@ -30,13 +30,13 @@ import sys.be4man.global.model.entity.BaseEntity;
 )
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class DeploymentLog extends BaseEntity {
+public class BuildRun extends BaseEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "deployment_id", nullable = false)
     private Deployment deployment;
 
@@ -59,7 +59,7 @@ public class DeploymentLog extends BaseEntity {
     private LocalDateTime endedAt;
 
     @Builder
-    public DeploymentLog(Deployment deployment, String jenkinsJobName, Long buildNumber,
+    public BuildRun(Deployment deployment, String jenkinsJobName, Long buildNumber,
             String log, Long duration, LocalDateTime startedAt, LocalDateTime endedAt) {
         this.deployment = deployment;
         this.jenkinsJobName = jenkinsJobName;
