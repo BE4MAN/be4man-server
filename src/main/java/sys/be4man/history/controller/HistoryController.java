@@ -8,7 +8,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import sys.be4man.domains.deployment.model.type.DeployStatus;
+import sys.be4man.domains.deployment.model.type.DeploymentStatus;
 import sys.be4man.history.dto.HistoryPageResponseDto;
 import sys.be4man.history.dto.HistoryResponseDto;
 import sys.be4man.history.dto.HistorySearchRequestDto;
@@ -65,7 +65,7 @@ public class HistoryController {
      */
     @GetMapping("/filter")
     public ResponseEntity<Page<HistoryResponseDto>> getFilteredHistory(
-            @RequestParam(required = false) DeployStatus status,
+            @RequestParam(required = false) DeploymentStatus status,
             @RequestParam(required = false) Long projectId,
             @RequestParam(required = false) LocalDate startDate,
             @RequestParam(required = false) LocalDate endDate,
@@ -101,7 +101,7 @@ public class HistoryController {
      */
     @GetMapping("/status/{status}")
     public ResponseEntity<Page<HistoryResponseDto>> getHistoryByStatus(
-            @PathVariable DeployStatus status,
+            @PathVariable DeploymentStatus status,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
@@ -248,30 +248,6 @@ public class HistoryController {
         log.info("통합 검색 완료 - 총 {}건", history.getTotalElements());
 
         return ResponseEntity.ok(history);
-    }
-
-    /**
-     *
-     * @param searchDto 검색 조건
-     * @param page 페이지 번호
-     * @param size 페이지 크기
-     * @return 커스텀 페이징 응답 (HistoryPageResponseDto)
-     */
-    @GetMapping("/custom")
-    public ResponseEntity<HistoryPageResponseDto> getCustomPageResponse(
-            @ModelAttribute HistorySearchRequestDto searchDto,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size
-    ) {
-        log.info("커스텀 페이징 응답 요청 - searchDto: {}, page: {}, size: {}",
-                searchDto, page, size);
-
-        HistoryPageResponseDto response = historyService.getFilteredHistoryWithCustomPage(
-                searchDto, page, size);
-
-        log.info("커스텀 페이징 응답 완료 - 총 {}건", response.getTotalElements());
-
-        return ResponseEntity.ok(response);
     }
 
     /**

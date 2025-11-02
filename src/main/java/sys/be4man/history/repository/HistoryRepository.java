@@ -7,7 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import sys.be4man.domains.deployment.model.entity.Deployment;
-import sys.be4man.domains.deployment.model.type.DeployStatus;
+import sys.be4man.domains.deployment.model.type.DeploymentStatus;
 
 import java.time.LocalDateTime;
 
@@ -27,6 +27,7 @@ public interface HistoryRepository extends JpaRepository<Deployment, Long> {
     @Query("SELECT d FROM Deployment d " +
             "LEFT JOIN FETCH d.project " +
             "LEFT JOIN FETCH d.issuer " +
+            "LEFT JOIN FETCH d.pullRequest " +
             "ORDER BY d.createdAt DESC")
     Page<Deployment> findAllHistory(Pageable pageable);
 
@@ -36,16 +37,17 @@ public interface HistoryRepository extends JpaRepository<Deployment, Long> {
      * - 결과 필터: SUCCESS, FAILURE
      *
      * 사용 예시:
-     * - 성공만 보기: findByStatus(DeployStatus.SUCCESS, pageable)
-     * - 승인 대기만 보기: findByStatus(DeployStatus.PENDING, pageable)
+     * - 성공만 보기: findByStatus(DeploymentStatus.SUCCESS, pageable)
+     * - 승인 대기만 보기: findByStatus(DeploymentStatus.PENDING, pageable)
      */
     @Query("SELECT d FROM Deployment d " +
             "LEFT JOIN FETCH d.project " +
             "LEFT JOIN FETCH d.issuer " +
+            "LEFT JOIN FETCH d.pullRequest " +
             "WHERE d.status = :status " +
             "ORDER BY d.createdAt DESC")
     Page<Deployment> findByStatus(
-            @Param("status") DeployStatus status,
+            @Param("status") DeploymentStatus status,
             Pageable pageable
     );
 
@@ -56,6 +58,7 @@ public interface HistoryRepository extends JpaRepository<Deployment, Long> {
     @Query("SELECT d FROM Deployment d " +
             "LEFT JOIN FETCH d.project p " +
             "LEFT JOIN FETCH d.issuer " +
+            "LEFT JOIN FETCH d.pullRequest " +
             "WHERE p.id = :projectId " +
             "ORDER BY d.createdAt DESC")
     Page<Deployment> findByProjectId(
@@ -77,6 +80,7 @@ public interface HistoryRepository extends JpaRepository<Deployment, Long> {
     @Query("SELECT d FROM Deployment d " +
             "LEFT JOIN FETCH d.project " +
             "LEFT JOIN FETCH d.issuer " +
+            "LEFT JOIN FETCH d.pullRequest " +
             "WHERE d.createdAt >= :startDate " +
             "AND d.createdAt <= :endDate " +
             "ORDER BY d.createdAt DESC")
@@ -98,13 +102,14 @@ public interface HistoryRepository extends JpaRepository<Deployment, Long> {
     @Query("SELECT d FROM Deployment d " +
             "LEFT JOIN FETCH d.project p " +
             "LEFT JOIN FETCH d.issuer " +
+            "LEFT JOIN FETCH d.pullRequest " +
             "WHERE (:status IS NULL OR d.status = :status) " +
             "AND (:projectId IS NULL OR p.id = :projectId) " +
             "AND (:startDate IS NULL OR d.createdAt >= :startDate) " +
             "AND (:endDate IS NULL OR d.createdAt <= :endDate) " +
             "ORDER BY d.createdAt DESC")
     Page<Deployment> findByFilters(
-            @Param("status") DeployStatus status,
+            @Param("status") DeploymentStatus status,
             @Param("projectId") Long projectId,
             @Param("startDate") LocalDateTime startDate,
             @Param("endDate") LocalDateTime endDate,
@@ -121,7 +126,8 @@ public interface HistoryRepository extends JpaRepository<Deployment, Long> {
     @Query("SELECT d FROM Deployment d " +
             "LEFT JOIN FETCH d.project " +
             "LEFT JOIN FETCH d.issuer " +
-            "WHERE d.prNumber = :prNumber " +
+            "LEFT JOIN FETCH d.pullRequest pr " +
+            "WHERE pr.prNumber = :prNumber " +
             "ORDER BY d.createdAt DESC")
     Page<Deployment> findByPrNumber(
             @Param("prNumber") Integer prNumber,
@@ -139,7 +145,8 @@ public interface HistoryRepository extends JpaRepository<Deployment, Long> {
     @Query("SELECT d FROM Deployment d " +
             "LEFT JOIN FETCH d.project " +
             "LEFT JOIN FETCH d.issuer " +
-            "WHERE d.branch LIKE CONCAT('%', :branch, '%') " +
+            "LEFT JOIN FETCH d.pullRequest pr " +
+            "WHERE pr.branch LIKE CONCAT('%', :branch, '%') " +
             "ORDER BY d.createdAt DESC")
     Page<Deployment> findByBranchContaining(
             @Param("branch") String branch,
@@ -153,6 +160,7 @@ public interface HistoryRepository extends JpaRepository<Deployment, Long> {
     @Query("SELECT d FROM Deployment d " +
             "LEFT JOIN FETCH d.project " +
             "LEFT JOIN FETCH d.issuer " +
+            "LEFT JOIN FETCH d.pullRequest " +
             "WHERE d.id = :deploymentId")
     Deployment findDetailById(@Param("deploymentId") Long deploymentId);
 }

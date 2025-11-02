@@ -105,7 +105,7 @@ public class HistoryService {
      * @return 상태별 배포 이력 DTO
      */
     public Page<HistoryResponseDto> getHistoryByStatus(
-            sys.be4man.domains.deployment.model.type.DeployStatus status,
+            sys.be4man.domains.deployment.model.type.DeploymentStatus status,
             int page,
             int size
     ) {
@@ -241,23 +241,7 @@ public class HistoryService {
         return new HistoryResponseDto(deployment);
     }
 
-    /**
-     * 9. 커스텀 페이징 응답 생성 (선택)
-     * - HistoryPageResponseDto 사용 시
-     *
-     * @param searchDto 검색 조건
-     * @param page 페이지 번호
-     * @param size 페이지 크기
-     * @return 커스텀 페이징 응답 DTO
-     */
-    public HistoryPageResponseDto getFilteredHistoryWithCustomPage(
-            HistorySearchRequestDto searchDto,
-            int page,
-            int size
-    ) {
-        Page<HistoryResponseDto> historyPage = getFilteredHistory(searchDto, page, size);
-        return HistoryPageResponseDto.from(historyPage);
-    }
+
 
     /**
      * 10. 통합 검색 (선택)

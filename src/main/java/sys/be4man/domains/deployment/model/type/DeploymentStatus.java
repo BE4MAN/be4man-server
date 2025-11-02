@@ -13,6 +13,7 @@ public enum DeploymentStatus {
     REJECTED("반려 완료"),
     SUCCESS("배포 성공"),
     FAILURE("배포 실패");
+    ;
 
     private final String koreanName;
 
