@@ -7,8 +7,9 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import java.time.LocalDateTime;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -18,20 +19,25 @@ import sys.be4man.domains.deployment.model.entity.Deployment;
 import sys.be4man.global.model.entity.BaseEntity;
 
 /**
- * 배포 로그 엔티티
+ * 빌드 실행 엔티티
  */
 @Entity
-@Table(name = "deployment_log")
+@Table(name = "build_run",
+        uniqueConstraints = @UniqueConstraint(
+                name = "uk_build_run_build_number_jenkins_job_name",
+                columnNames = {"build_number", "jenkins_job_name"}
+        )
+)
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class DeploymentLog extends BaseEntity {
+public class BuildRun extends BaseEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "deploy_id", nullable = false)
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "deployment_id", nullable = false)
     private Deployment deployment;
 
     @Column(name = "jenkins_job_name", nullable = false)
@@ -53,7 +59,7 @@ public class DeploymentLog extends BaseEntity {
     private LocalDateTime endedAt;
 
     @Builder
-    public DeploymentLog(Deployment deployment, String jenkinsJobName, Long buildNumber,
+    public BuildRun(Deployment deployment, String jenkinsJobName, Long buildNumber,
             String log, Long duration, LocalDateTime startedAt, LocalDateTime endedAt) {
         this.deployment = deployment;
         this.jenkinsJobName = jenkinsJobName;
@@ -69,6 +75,27 @@ public class DeploymentLog extends BaseEntity {
      */
     public void updateLog(String log) {
         this.log = log;
+    }
+
+    /**
+     * 빌드 소요 시간 업데이트
+     */
+    public void updateDuration(Long duration){
+        this.duration = duration;
+    }
+
+    /**
+     * 빌드 시작 시간 업데이트
+     */
+    public void updateStartedAt(LocalDateTime startedAt){
+        this.startedAt = startedAt;
+    }
+
+    /**
+     * 빌드 종료 시간 업데이트
+     */
+    public void updateEndedAt(LocalDateTime endedAt){
+        this.endedAt = endedAt;
     }
 
 }
