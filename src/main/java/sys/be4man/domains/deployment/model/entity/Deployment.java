@@ -20,7 +20,7 @@ import sys.be4man.domains.account.model.entity.Account;
 import sys.be4man.domains.deployment.model.type.DeploymentStatus;
 import sys.be4man.domains.deployment.model.type.DeploymentType;
 import sys.be4man.domains.deployment.model.type.RiskLevel;
-import sys.be4man.domains.history.model.type.ReportStatus;
+import sys.be4man.domains.common.model.type.ReportStatus;
 import sys.be4man.domains.project.model.entity.Project;
 import sys.be4man.domains.pullrequest.model.entity.PullRequest;
 import sys.be4man.global.model.entity.BaseEntity;

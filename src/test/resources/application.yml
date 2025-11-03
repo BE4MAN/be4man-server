@@ -1,0 +1,78 @@
+spring:
+  application:
+    name: be4man-server-test
+
+  # 테스트용 H2 인메모리 DB 사용
+  datasource:
+    url: jdbc:h2:mem:testdb
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+
+  # JPA
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.H2Dialect
+    open-in-view: false
+
+  h2:
+    console:
+      enabled: true
+
+  # 테스트용 Redis (embedded 또는 mock 사용)
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+  # OAuth2 테스트용 더미 값
+  security:
+    oauth2:
+      client:
+        registration:
+          github:
+            client-id: test-client-id
+            client-secret: test-client-secret
+            redirect-uri: http://localhost:8080/login/oauth2/code/github
+            scope:
+              - read:user
+              - user:email
+            client-name: GitHub
+
+# Server
+server:
+  port: 8080
+
+# 테스트용 JWT 시크릿
+jwt:
+  secret: test-jwt-secret-key-for-testing-purposes-only-do-not-use-in-production
+  access-expiration: 3600000
+  refresh-expiration: 1209600000
+  sign-expiration: 300000
+
+# Frontend URL
+app:
+  frontend:
+    url: http://localhost:5173
+
+# Logging (테스트 시 로그 레벨 조정)
+logging:
+  level:
+    root: INFO
+    org.springframework.security: INFO
+    org.hibernate.SQL: DEBUG
+
+# Jenkins 테스트용 더미 값
+jenkins:
+  url: http://localhost:8080
+  username: test-user
+  password: test-password
+
+# Gemini 테스트용 더미 값
+gemini:
+  api:
+    key: test-gemini-api-key
