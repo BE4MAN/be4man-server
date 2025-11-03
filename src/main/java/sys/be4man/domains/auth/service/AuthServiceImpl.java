@@ -105,7 +105,7 @@ public class AuthServiceImpl implements AuthService {
         // Refresh Token 발급 (기존 토큰 교체)
         String refreshToken = refreshTokenRedisService.createAndSave(account.getId());
 
-        log.info("로그인 완료 - accountId: {}", accountId);
+        log.info("로그인 완료 - accountId: {} accessToken: {}", accountId, accessToken);
 
         return new AuthResponse(accessToken, refreshToken);
     }
