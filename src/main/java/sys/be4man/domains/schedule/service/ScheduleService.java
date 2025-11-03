@@ -1,7 +1,10 @@
 package sys.be4man.domains.schedule.service;
 
+import java.time.LocalDate;
+import java.util.List;
 import sys.be4man.domains.schedule.dto.request.CreateBanRequest;
 import sys.be4man.domains.schedule.dto.response.BanResponse;
+import sys.be4man.domains.schedule.dto.response.DeploymentScheduleResponse;
 import sys.be4man.domains.schedule.dto.response.ScheduleMetadataResponse;
 
 /**
@@ -20,5 +23,10 @@ public interface ScheduleService {
      * 작업 금지 기간 생성
      */
     BanResponse createBan(CreateBanRequest request, Long accountId);
+
+    /**
+     * 배포 작업 목록 조회
+     */
+    List<DeploymentScheduleResponse> getDeploymentSchedules(LocalDate startDate, LocalDate endDate);
 }
 

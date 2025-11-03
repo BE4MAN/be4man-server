@@ -14,10 +14,14 @@ import sys.be4man.domains.ban.model.entity.ProjectBan;
 import sys.be4man.domains.ban.model.type.BanType;
 import sys.be4man.domains.ban.repository.BanRepository;
 import sys.be4man.domains.ban.repository.ProjectBanRepository;
+import java.time.LocalDate;
+import sys.be4man.domains.deployment.model.entity.Deployment;
+import sys.be4man.domains.deployment.repository.DeploymentRepository;
 import sys.be4man.domains.project.model.entity.Project;
 import sys.be4man.domains.project.repository.ProjectRepository;
 import sys.be4man.domains.schedule.dto.request.CreateBanRequest;
 import sys.be4man.domains.schedule.dto.response.BanResponse;
+import sys.be4man.domains.schedule.dto.response.DeploymentScheduleResponse;
 import sys.be4man.domains.schedule.dto.response.ScheduleMetadataResponse;
 import sys.be4man.domains.schedule.exception.type.ScheduleExceptionType;
 import sys.be4man.global.exception.BadRequestException;
@@ -35,6 +39,7 @@ public class ScheduleServiceImpl implements ScheduleService {
     private final BanRepository banRepository;
     private final ProjectBanRepository projectBanRepository;
     private final AccountChecker accountChecker;
+    private final DeploymentRepository deploymentRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -126,6 +131,27 @@ public class ScheduleServiceImpl implements ScheduleService {
         if (endDate.equals(startDate) && endTime.isBefore(startTime)) {
             throw new BadRequestException(ScheduleExceptionType.INVALID_TIME_RANGE);
         }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<DeploymentScheduleResponse> getDeploymentSchedules(LocalDate startDate, LocalDate endDate) {
+        log.info("배포 작업 목록 조회 - startDate: {}, endDate: {}", startDate, endDate);
+
+        // LocalDateTime 변환 (시작일 00:00, 종료일 23:59:59)
+        LocalDateTime startDateTime = startDate.atStartOfDay();
+        LocalDateTime endDateTime = endDate.atTime(23, 59, 59);
+
+        // 배포 작업 조회
+        List<Deployment> deployments = deploymentRepository.findScheduledDeployments(
+                startDateTime,
+                endDateTime
+        );
+
+        // DTO 변환
+        return deployments.stream()
+                .map(DeploymentScheduleResponse::from)
+                .toList();
     }
 }
 
