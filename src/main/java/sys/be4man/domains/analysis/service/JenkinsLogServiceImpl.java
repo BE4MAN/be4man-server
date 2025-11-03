@@ -129,50 +129,79 @@ public class JenkinsLogServiceImpl implements LogService {
     @Transactional
     @Override
     public void fetchAndSaveLogAsync(JenkinsWebhooksResponseDto jenkinsData) {
-        Long deploymentId = jenkinsData.deploymentId();
+        final Long deploymentId = jenkinsData.deploymentId();
+        final String jobName = jenkinsData.jobName();
+        final String buildNumber = jenkinsData.buildNumber();
+
         try {
-            // (A) progressive 방식으로 콘솔 로그 전체 수집
-            String fullLog = fetchConsoleLog(jenkinsData.jobName(), jenkinsData.buildNumber());
-
-            LocalDateTime startedAt = parseIsoOrNull(jenkinsData.startTime()); // 'yyyy-MM-ddTHH:mm:ss.SSSZ' 형태 가정(UTC Z)
+            // 1) 우선 웹훅에 실린 값으로 시각 확정 시도
+            LocalDateTime startedAt = parseIsoOrNull(jenkinsData.startTime());
             LocalDateTime endedAt   = parseIsoOrNull(jenkinsData.endTime());
-            Long durSec             = parseDurationSeconds(jenkinsData.duration()); // "1 min 58 sec" → 118
+            Long durSecFromWebhook  = parseDurationSeconds(jenkinsData.duration()); // "and counting"이면 null
 
-            if (startedAt == null && endedAt != null && durSec != null) {
-                startedAt = endedAt.minusSeconds(durSec);
-            } else if (endedAt == null && startedAt != null && durSec != null) {
-                endedAt = startedAt.plusSeconds(durSec);
+            if (startedAt == null && endedAt != null && durSecFromWebhook != null) {
+                startedAt = endedAt.minusSeconds(durSecFromWebhook);
+            } else if (endedAt == null && startedAt != null && durSecFromWebhook != null) {
+                endedAt = startedAt.plusSeconds(durSecFromWebhook);
             }
 
+            // 2) 여전히 started/ended 확정이 안 되면: Jenkins Build JSON API를 5초마다 폴링
             if (startedAt == null || endedAt == null) {
-                log.warn("[Skip Persist] started_at/ended_at 확정 불가 → 저장하지 않음. " +
-                                "(deploymentId={}, startTime={}, endTime={}, duration={})",
-                        deploymentId, jenkinsData.startTime(), jenkinsData.endTime(), jenkinsData.duration());
+                final int MAX_MINUTES = 10;       // 최대 대기 10분 (필요시 조정/설정값화)
+                final int SLEEP_MS = 5000;        // 5초 간격
+                final long deadline = System.currentTimeMillis() + MAX_MINUTES * 60_000L;
+
+                while (System.currentTimeMillis() < deadline) {
+                    BuildMeta meta = fetchBuildMeta(jobName, buildNumber);
+                    if (meta != null && !meta.building) {
+                        // Jenkins API: timestamp(ms) = 시작시각, duration(ms) = 총 소요
+                        LocalDateTime start = LocalDateTime.ofInstant(
+                                java.time.Instant.ofEpochMilli(meta.timestamp),
+                                java.time.ZoneOffset.UTC);
+                        LocalDateTime end = start.plusNanos(java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(meta.durationMs));
+                        startedAt = (startedAt == null) ? start : startedAt;
+                        endedAt   = (endedAt   == null) ? end   : endedAt;
+                        log.info("Jenkins build finished via polling. job={}, build={}, startedAt={}, endedAt={}, result={}",
+                                jobName, buildNumber, startedAt, endedAt, meta.result);
+                        break;
+                    }
+                    try { Thread.sleep(SLEEP_MS); } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                }
+            }
+
+            // 3) 그래도 확정 못했으면 (예: 타임아웃) 저장 스킵
+            if (startedAt == null || endedAt == null) {
+                log.warn("[Skip Persist] started_at/ended_at 미확정 (타임아웃/진행중). depId={}, job={}, build={}, duration='{}'",
+                        deploymentId, jobName, buildNumber, jenkinsData.duration());
                 return;
             }
 
+            // 4) 이제 최종 로그(완료본) 수집 → 스테이지 파싱
+            String fullLog = fetchConsoleLog(jobName, buildNumber); // progressiveText로 완료본 취득
+            List<JenkinsConsoleLogParser.StageBlock> stages = JenkinsConsoleLogParser.parse(fullLog);
 
-            var deployment = deploymentRepository.findByIdAndIsDeletedFalse(deploymentId)
+            // 5) 엔티티 조회
+            Deployment deployment = deploymentRepository.findByIdAndIsDeletedFalse(deploymentId)
                     .orElseThrow(() -> new NotFoundException(DeploymentExceptionType.DEPLOYMENT_NOT_FOUND));
 
-            long durationSeconds = durSec != null ? durSec : java.time.Duration.between(startedAt, endedAt).getSeconds();
+            long durationSeconds = java.time.Duration.between(startedAt, endedAt).getSeconds();
 
-            // 콘솔 로그를 스테이지 단위로 파싱 (기존 JenkinsConsoleParser 등 사용)
-            List<StageBlock> stages = JenkinsConsoleLogParser.parse(fullLog);
-
-            // BuildRun 저장
+            // 6) BuildRun 저장
             BuildRun buildRun = BuildRun.builder()
                     .deployment(deployment)
-                    .buildNumber(Long.parseLong(jenkinsData.buildNumber()))
-                    .jenkinsJobName(jenkinsData.jobName())
-                    .duration(DurationParser.toSeconds(jenkinsData.duration()))
+                    .buildNumber(Long.parseLong(buildNumber))
+                    .jenkinsJobName(jobName)
+                    .duration((Long)Math.max(0, durationSeconds))
                     .startedAt(startedAt)
                     .endedAt(endedAt)
                     .log(fullLog)
                     .build();
             buildRunRepository.save(buildRun);
 
-            // StageRun 저장
+            // 7) StageRun 저장
             var stageEntities = stages.stream()
                     .map(s -> StageRun.builder()
                             .buildRun(buildRun)
@@ -184,16 +213,66 @@ public class JenkinsLogServiceImpl implements LogService {
                     .toList();
             stageRunRepository.saveAll(stageEntities);
 
-            // 실패 스테이지만 따로 분석 (기존 로직 유지)
+            // 8) 실패 스테이지 분석
             var failedStages = stageEntities.stream().filter(sr -> !sr.getIsSuccess()).toList();
             stageAnalysisService.analyzeFailedStages(failedStages);
 
-            log.info("[Persist OK] BuildRun/StageRun saved. deploymentId={}, build={}, startedAt={}, endedAt={}",
-                    deploymentId, jenkinsData.buildNumber(), startedAt, endedAt);
+            log.info("[Persist OK] BuildRun/StageRun 저장 완료. depId={}, job={}, build={}, startedAt={}, endedAt={}",
+                    deploymentId, jobName, buildNumber, startedAt, endedAt);
 
         } catch (RuntimeException e) {
-            log.error("[Async Failure] Deployment ID {} 로그 처리 중 오류 발생: {}", deploymentId, e.getMessage(), e);
+            log.error("[Async Failure] depId={}, job={}, build={} 처리 중 오류: {}", deploymentId, jobName, buildNumber, e.getMessage(), e);
             throw e;
+        }
+    }
+
+    /** Jenkins Build JSON API 조회 (building, timestamp, duration, result) */
+    private BuildMeta fetchBuildMeta(String jobName, String buildNumber) {
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            String auth = jenkinsUsername + ":" + jenkinsPassword;
+            String encodedAuth = Base64.getEncoder().encodeToString(auth.getBytes(StandardCharsets.UTF_8));
+            headers.set("Authorization", "Basic " + encodedAuth);
+
+            // 예: https://JENKINS/job/{job}/{build}/api/json?tree=building,timestamp,duration,result
+            String url = jenkinsUrl + "/job/" + jobName + "/" + buildNumber
+                    + "/api/json?tree=building,timestamp,duration,result";
+
+            ResponseEntity<java.util.Map> resp = restTemplate.exchange(
+                    url, HttpMethod.GET, new HttpEntity<>(headers), java.util.Map.class);
+
+            java.util.Map<?,?> map = resp.getBody();
+            if (map == null) return null;
+
+            boolean building = Boolean.TRUE.equals(map.get("building"));
+            Number ts = (Number) map.get("timestamp"); // epoch millis (start)
+            Number dur = (Number) map.get("duration"); // millis
+            String result = (String) map.get("result"); // SUCCESS/FAILURE/...
+
+            return new BuildMeta(building,
+                    ts != null ? ts.longValue() : 0L,
+                    dur != null ? dur.longValue() : 0L,
+                    result);
+        } catch (HttpClientErrorException.NotFound nf) {
+            // 빌드 직후 곧바로 조회하면 404일 수 있음 → 폴링 계속
+            return null;
+        } catch (Exception e) {
+            log.warn("fetchBuildMeta 실패: job={}, build={}, err={}", jobName, buildNumber, e.getMessage());
+            return null;
+        }
+    }
+
+    /** 빌드 메타 정보 */
+    private static final class BuildMeta {
+        final boolean building;
+        final long timestamp;   // ms (시작시각)
+        final long durationMs;  // ms (총 소요)
+        final String result;
+        BuildMeta(boolean building, long timestamp, long durationMs, String result) {
+            this.building = building;
+            this.timestamp = timestamp;
+            this.durationMs = durationMs;
+            this.result = result;
         }
     }
 
