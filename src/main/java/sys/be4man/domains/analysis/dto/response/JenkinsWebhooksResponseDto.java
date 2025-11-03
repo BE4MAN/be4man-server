@@ -4,8 +4,8 @@ package sys.be4man.domains.analysis.dto.response;
  * Jenkins 웹훅 알림 요청 본문(Body)을 수신하기 위한 DTO
  */
 
-// TODO 지금은 아직 앞단이 안끝났는데, Jenkins로부터 배포 id 받을거라 deploymentId 추가해야 함
 public record JenkinsWebhooksResponseDto(
+        Long deploymentId,
         // Jenkins 작업 이름
         String jobName,
         // Jenkins 빌드 넘버
