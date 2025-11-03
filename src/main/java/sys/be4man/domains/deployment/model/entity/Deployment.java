@@ -89,6 +89,7 @@ public class Deployment extends BaseEntity {
     @Column(name = "strategy")
     private String strategy;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "stage")
     private DeploymentStage stage;
 
