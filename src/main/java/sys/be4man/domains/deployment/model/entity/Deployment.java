@@ -70,7 +70,7 @@ public class Deployment extends BaseEntity {
     @Column(name = "is_deployed")
     private Boolean isDeployed;
 
-    @Column(name = "scheduled_at")
+    @Column(name = "scheduled_at", nullable = false)
     private LocalDateTime scheduledAt;
 
     @Column(name = "scheduled_to_ended_at")
