@@ -90,7 +90,7 @@ public class Deployment extends BaseEntity {
     private String strategy;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "stage", nullable = false, columnDefinition = "varchar(50)")
+    @Column(name = "stage")
     private DeploymentStage stage;
 
     @Builder

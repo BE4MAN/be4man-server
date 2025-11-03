@@ -34,8 +34,7 @@ public class JenkinsWebhookController {
     public ResponseEntity<String> handleJenkinsWebhook(@RequestBody JenkinsWebhooksResponseDto jenkinsData) {
         // 1. 수신된 데이터 로깅
         log.info("============== Jenkins Webhook Received ==============");
-        // TODO 나중에 deploymentId도 젠킨스에서 실제로 받아오게 해야 함.
-        long deploymentId = 1L;
+        log.info("Deployment Id: {}", jenkinsData.deploymentId());
         log.info("Job Name: {}", jenkinsData.jobName());
         log.info("Build Number: {}", jenkinsData.buildNumber());
         log.info("Result: {}", jenkinsData.result());
@@ -43,6 +42,8 @@ public class JenkinsWebhookController {
         log.info("Start Time: {}", jenkinsData.startTime());
         log.info("End Time: {}", jenkinsData.endTime());
         log.info("======================================================");
+
+        Long deploymentId = jenkinsData.deploymentId();
 
         // 2. Jenkins 서버로부터 받은 status로부터 배포 여부 결정. SUCCESS, UNSTABLE, ABORTED, FAILURE, NOT_BUILT가 있으며 SUCCESS와 UNSTABLE은 배포 성공
         Boolean isDeployed = DeploymentResult.fromJenkinsStatus(jenkinsData.result()).getIsDeployed();
