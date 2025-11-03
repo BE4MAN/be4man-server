@@ -13,7 +13,7 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class SwaggerConfig {
 
-    private static final String JWT_SCHEME_NAME = "JWT 토큰";
+    private static final String JWT_SCHEME_NAME = "Bearer Authentication";
 
     @Bean
     public OpenAPI customOpenAPI() {
