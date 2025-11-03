@@ -83,3 +83,5 @@ public class Project extends BaseEntity {
         this.jenkinsIp = jenkinsIp;
     }
 }
+
+

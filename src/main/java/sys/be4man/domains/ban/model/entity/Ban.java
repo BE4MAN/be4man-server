@@ -79,3 +79,5 @@ public class Ban extends BaseEntity {
         this.description = description;
     }
 }
+
+

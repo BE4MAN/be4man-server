@@ -42,7 +42,7 @@ public class AccountProject extends BaseEntity {
     private Account account;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "service_id", nullable = false)
+    @JoinColumn(name = "project_id", nullable = false)
     private Project project;
 
     @Builder
