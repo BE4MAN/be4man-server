@@ -5,15 +5,14 @@ import com.querydsl.core.types.OrderSpecifier;
 import com.querydsl.jpa.impl.JPAQuery;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 import sys.be4man.domains.deployment.model.entity.Deployment;
 import sys.be4man.domains.deployment.model.type.DeploymentStatus;
-import sys.be4man.domains.common.model.type.ProcessingStage;
-import sys.be4man.domains.common.model.type.ProcessingStatus;
-import sys.be4man.domains.common.model.type.ReportStatus;
+import sys.be4man.domains.deployment.model.type.DeploymentStage;
 import sys.be4man.domains.taskmanagement.dto.TaskManagementSearchDto;
 
 import java.time.LocalDateTime;
@@ -25,6 +24,7 @@ import static sys.be4man.domains.account.model.entity.QAccount.account;
 import static sys.be4man.domains.project.model.entity.QProject.project;
 import static sys.be4man.domains.pullrequest.model.entity.QPullRequest.pullRequest;
 
+@Slf4j
 @Repository
 @RequiredArgsConstructor
 public class TaskManagementRepositoryImpl implements TaskManagementRepositoryCustom {
@@ -72,7 +72,7 @@ public class TaskManagementRepositoryImpl implements TaskManagementRepositoryCus
             builder.and(buildStageCondition(searchDto.getStage()));
         }
 
-        // 4. 처리 상태 필터 (승인대기/반려/진행중/취소/완료)
+        // 4. 처리 상태 필터 (승인대기/종료/진행중/취소/완료)
         if (!searchDto.isStatusAll()) {
             builder.and(buildStatusCondition(searchDto.getStatus()));
         }
@@ -119,54 +119,79 @@ public class TaskManagementRepositoryImpl implements TaskManagementRepositoryCus
 
     /**
      * 처리 단계 조건 생성
+     *
+     * 작업 내역 표시 규칙:
+     * 1. 계획서 단계:
+     *    - PENDING(승인대기)만 표시
+     *    - 반려 시: 작업 관리 내역에 표시 안 함 (모든 승인자)
+     *
+     * 2. 배포 단계:
+     *    - IN_PROGRESS(배포중): scheduledAt 시간에 자동 시작
+     *    - COMPLETED(종료): 배포 완료
+     *    - CANCELED(취소): 배포 중 취소
+     *
+     * 3. 결과보고 단계:
+     *    - PENDING(승인대기): 승인 대기 중
+     *    - REJECTED(반려): 누구 한 명이라도 반려 시 모든 승인자의 내역에 표시
+     *    - APPROVED(완료): 모든 승인 완료
      */
     private BooleanBuilder buildStageCondition(String stage) {
         BooleanBuilder builder = new BooleanBuilder();
 
         if ("계획서".equals(stage)) {
-            // STAGED, PENDING, APPROVED, REJECTED, CANCELED
-            builder.or(deployment.status.eq(DeploymentStatus.STAGED))
-                   .or(deployment.status.eq(DeploymentStatus.PENDING))
-                   .or(deployment.status.eq(DeploymentStatus.APPROVED))
-                   .or(deployment.status.eq(DeploymentStatus.REJECTED))
-                   .or(deployment.status.eq(DeploymentStatus.CANCELED));
+            // 계획서는 승인대기만 표시
+            builder.and(deployment.stage.eq(DeploymentStage.PLAN))
+                    .and(deployment.status.eq(DeploymentStatus.PENDING));
+
         } else if ("배포".equals(stage)) {
-            // DEPLOYMENT 또는 COMPLETED (ReportStatus 없음)
-            builder.or(deployment.status.eq(DeploymentStatus.DEPLOYMENT))
-                   .or(deployment.status.eq(DeploymentStatus.COMPLETED)
-                       .and(deployment.reportStatus.isNull()));
+            // 배포는 배포중, 종료, 취소 표시
+            builder.and(deployment.stage.eq(DeploymentStage.DEPLOYMENT))
+                    .and(deployment.status.in(
+                            DeploymentStatus.IN_PROGRESS,
+                            DeploymentStatus.COMPLETED,
+                            DeploymentStatus.CANCELED
+                    ));
+
         } else if ("결과보고".equals(stage)) {
-            // COMPLETED (ReportStatus 있음)
-            builder.and(deployment.status.eq(DeploymentStatus.COMPLETED))
-                   .and(deployment.reportStatus.isNotNull());
+            // 결과보고는 승인대기, 반려, 완료 표시
+            builder.and(deployment.stage.eq(DeploymentStage.REPORT))
+                    .and(deployment.status.in(
+                            DeploymentStatus.PENDING,
+                            DeploymentStatus.REJECTED,
+                            DeploymentStatus.APPROVED
+                    ));
         }
 
         return builder;
     }
 
+
     /**
      * 처리 상태 조건 생성
+     * 상태 매핑:
+     * - 승인대기: PENDING (계획서/결과보고 단계)
+     * - 배포중: IN_PROGRESS (배포 단계)
+     * - 취소: CANCELED (배포 단계)
+     * - 종료: COMPLETED (배포 단계)
+     * - 반려: REJECTED (결과보고 단계)
+     * - 완료: APPROVED (결과보고 단계)
      */
     private BooleanBuilder buildStatusCondition(String status) {
         BooleanBuilder builder = new BooleanBuilder();
 
         if ("승인대기".equals(status)) {
-            builder.or(deployment.status.eq(DeploymentStatus.PENDING))
-                   .or(deployment.status.eq(DeploymentStatus.STAGED))
-                   .or(deployment.reportStatus.eq(ReportStatus.PENDING));
-        } else if ("반려".equals(status)) {
-            builder.or(deployment.status.eq(DeploymentStatus.REJECTED))
-                   .or(deployment.reportStatus.eq(ReportStatus.REJECTED));
-        } else if ("진행중".equals(status)) {
-            builder.or(deployment.status.eq(DeploymentStatus.DEPLOYMENT));
+            builder.or(deployment.status.eq(DeploymentStatus.PENDING));
+        } else if ("배포중".equals(status)) {
+            builder.or(deployment.status.eq(DeploymentStatus.IN_PROGRESS));
         } else if ("취소".equals(status)) {
             builder.or(deployment.status.eq(DeploymentStatus.CANCELED));
+        } else if ("종료".equals(status)) {
+            builder.or(deployment.status.eq(DeploymentStatus.COMPLETED));
+        } else if ("반려".equals(status)) {
+            builder.or(deployment.status.eq(DeploymentStatus.REJECTED));
         } else if ("완료".equals(status)) {
-            builder.or(deployment.status.eq(DeploymentStatus.COMPLETED))
-                   .or(deployment.status.eq(DeploymentStatus.APPROVED))
-                   .or(deployment.reportStatus.eq(ReportStatus.APPROVED));
+            builder.or(deployment.status.eq(DeploymentStatus.APPROVED));
         }
-
         return builder;
     }
 

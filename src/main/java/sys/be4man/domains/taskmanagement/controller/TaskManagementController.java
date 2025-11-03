@@ -32,13 +32,13 @@ public class TaskManagementController {
      *
      * @param searchQuery 검색어 (작업번호, 기안자, 서비스명)
      * @param stage 처리 단계 (전체/계획서/배포/결과보고)
-     * @param status 처리 상태 (전체/승인대기/반려/진행중/취소/완료)
+     * @param status 처리 상태 (전체/승인대기/진행중/취소/종료/완료)
      * @param result 결과 (전체/성공/실패)
      * @param startDate 시작일 (YYYY-MM-DD)
      * @param endDate 종료일 (YYYY-MM-DD)
      * @param sortBy 정렬 순서 (최신순/오래된순)
      * @param page 페이지 번호 (기본값: 0)
-     * @param size 페이지 크기 (기본값: 9)
+     * @param size 페이지 크기 (기본값: 8)
      * @return 페이징된 작업 목록
      */
     @GetMapping
@@ -51,7 +51,7 @@ public class TaskManagementController {
             @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(pattern = "yyyy-MM-dd") java.time.LocalDate endDate,
             @RequestParam(required = false, defaultValue = "최신순") String sortBy,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "9") int size
+            @RequestParam(defaultValue = "8") int size
     ) {
         log.info("작업 관리 목록 조회 요청 - searchQuery: {}, stage: {}, status: {}, result: {}, " +
                 "startDate: {}, endDate: {}, sortBy: {}, page: {}, size: {}",

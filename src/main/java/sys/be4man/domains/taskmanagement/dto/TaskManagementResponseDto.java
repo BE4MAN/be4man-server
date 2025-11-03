@@ -3,9 +3,7 @@ package sys.be4man.domains.taskmanagement.dto;
 import lombok.*;
 import sys.be4man.domains.deployment.model.entity.Deployment;
 import sys.be4man.domains.deployment.model.type.DeploymentStatus;
-import sys.be4man.domains.common.model.type.ProcessingStage;
-import sys.be4man.domains.common.model.type.ProcessingStatus;
-import sys.be4man.domains.common.model.type.ReportStatus;
+import sys.be4man.domains.deployment.model.type.DeploymentStage;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -41,20 +39,15 @@ public class TaskManagementResponseDto {
         this.serviceName = getServiceName(deployment);
         this.taskTitle = deployment.getTitle();
 
-        // 처리 단계 매핑
-        ProcessingStage processingStage = determineProcessingStage(
-            deployment.getStatus(),
-            deployment.getReportStatus()
-        );
-        this.stage = processingStage != null ? processingStage.getKoreanName() : null;
+        // 처리 단계 매핑 (DeploymentStage 사용)
+        this.stage = deployment.getStage() != null
+            ? deployment.getStage().getKoreanName()
+            : determineStageFromStatus(deployment.getStatus());
 
-        // 처리 상태 매핑
-        ProcessingStatus processingStatus = determineProcessingStatus(
-            deployment.getStatus(),
-            deployment.getReportStatus(),
-            processingStage
-        );
-        this.status = processingStatus != null ? processingStatus.getKoreanName() : null;
+        // 처리 상태 매핑 (DeploymentStatus의 koreanName 직접 사용)
+        this.status = deployment.getStatus() != null
+            ? deployment.getStatus().getKoreanName()
+            : null;
 
         // 완료 시각 포맷팅
         this.completionTime = formatCompletionTime(deployment);
@@ -88,98 +81,35 @@ public class TaskManagementResponseDto {
     }
 
     /**
-     * 처리 단계 결정
-     * - 계획서: STAGED, PENDING, APPROVED, REJECTED, CANCELED
-     * - 배포: DEPLOYMENT
-     * - 결과보고: COMPLETED (ReportStatus 있음)
+     * DeploymentStatus로부터 처리 단계 결정
+     * - 계획서: stage가 PLAN이고 PENDING만
+     * - 배포: stage가 DEPLOYMENT이고 (IN_PROGRESS, COMPLETED, CANCELED)
+     * - 결과보고: stage가 REPORT이고 (PENDING, REJECTED, APPROVED)
+     *
+     * stage가 없는 경우 status로 추론 (하위 호환성)
      */
-    private ProcessingStage determineProcessingStage(
-        DeploymentStatus deploymentStatus,
-        ReportStatus reportStatus
-    ) {
+    private String determineStageFromStatus(DeploymentStatus deploymentStatus) {
         if (deploymentStatus == null) {
             return null;
         }
 
+        // stage가 없는 경우 status로 추론
         switch (deploymentStatus) {
-            case STAGED:
             case PENDING:
-            case APPROVED:
-            case REJECTED:
-            case CANCELED:
-                return ProcessingStage.PLAN;
+                return "계획서"; // 또는 "결과보고" (stage로 구분 필요)
 
-            case DEPLOYMENT:
-                return ProcessingStage.DEPLOYMENT;
-
+            case IN_PROGRESS:
             case COMPLETED:
-                // 완료 후 보고서 상태가 있으면 결과보고, 없으면 배포
-                return reportStatus != null ? ProcessingStage.REPORT : ProcessingStage.DEPLOYMENT;
+            case CANCELED:
+                return "배포";
+
+            case REJECTED:
+            case APPROVED:
+                return "결과보고";
 
             default:
                 return null;
         }
-    }
-
-    /**
-     * 처리 상태 결정
-     */
-    private ProcessingStatus determineProcessingStatus(
-        DeploymentStatus deploymentStatus,
-        ReportStatus reportStatus,
-        ProcessingStage processingStage
-    ) {
-        if (deploymentStatus == null || processingStage == null) {
-            return null;
-        }
-
-        // 계획서 단계
-        if (processingStage == ProcessingStage.PLAN) {
-            switch (deploymentStatus) {
-                case STAGED:
-                case PENDING:
-                    return ProcessingStatus.PENDING;
-                case APPROVED:
-                    return ProcessingStatus.APPROVED;
-                case REJECTED:
-                    return ProcessingStatus.REJECTED;
-                case CANCELED:
-                    return ProcessingStatus.CANCELED;
-                default:
-                    return null;
-            }
-        }
-
-        // 배포 단계
-        if (processingStage == ProcessingStage.DEPLOYMENT) {
-            switch (deploymentStatus) {
-                case DEPLOYMENT:
-                    return ProcessingStatus.IN_PROGRESS;
-                case COMPLETED:
-                    return ProcessingStatus.COMPLETED;
-                default:
-                    return null;
-            }
-        }
-
-        // 결과보고 단계
-        if (processingStage == ProcessingStage.REPORT) {
-            if (reportStatus == null) {
-                return ProcessingStatus.PENDING;
-            }
-            switch (reportStatus) {
-                case PENDING:
-                    return ProcessingStatus.PENDING;
-                case APPROVED:
-                    return ProcessingStatus.APPROVED;
-                case REJECTED:
-                    return ProcessingStatus.REJECTED;
-                default:
-                    return null;
-            }
-        }
-
-        return null;
     }
 
     /**

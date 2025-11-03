@@ -89,7 +89,8 @@ public class Deployment extends BaseEntity {
     @Column(name = "strategy")
     private String strategy;
 
-    @Column(name = "stage")
+    @Enumerated(EnumType.STRING)
+    @Column(name = "stage", nullable = false, columnDefinition = "varchar(50)")
     private DeploymentStage stage;
 
     @Builder
