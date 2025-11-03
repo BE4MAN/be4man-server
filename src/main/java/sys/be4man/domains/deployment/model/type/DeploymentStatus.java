@@ -7,13 +7,13 @@ import lombok.Getter;
  */
 @Getter
 public enum DeploymentStatus {
-    STAGED("작업 계획서 신청 전"),
-    PENDING("결제 대기"),
-    APPROVED("승인 완료"),
-    CANCELED("취소"),
+
+    PENDING("승인대기"),
     REJECTED("반려"),
-    DEPLOYMENT("배포"),
-    COMPLETED("배포 작업 완료");
+    IN_PROGRESS("진행중"),
+    CANCELED("취소"),
+    COMPLETED("완료"),
+    APPROVED("승인");
 
     private final String koreanName;
 

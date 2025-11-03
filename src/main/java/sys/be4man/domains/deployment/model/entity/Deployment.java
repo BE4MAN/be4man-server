@@ -17,6 +17,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import sys.be4man.domains.account.model.entity.Account;
+import sys.be4man.domains.deployment.model.type.DeploymentStage;
 import sys.be4man.domains.deployment.model.type.DeploymentStatus;
 import sys.be4man.domains.deployment.model.type.DeploymentType;
 import sys.be4man.domains.deployment.model.type.RiskLevel;
@@ -88,13 +89,16 @@ public class Deployment extends BaseEntity {
     @Column(name = "strategy")
     private String strategy;
 
+    @Column(name = "stage")
+    private DeploymentStage stage;
+
     @Builder
     public Deployment(
             Project project, Account issuer, PullRequest pullRequest,
             String title, String content, DeploymentType type,
             DeploymentStatus status, RiskLevel riskLevel, String expectedDuration,
             Boolean isDeployed, LocalDateTime scheduledAt, LocalDateTime scheduledToEndedAt,
-            String riskDescription, String version, String strategy
+            String riskDescription, String version, String strategy, DeploymentStage stage
     ) {
         this.project = project;
         this.issuer = issuer;
@@ -111,6 +115,7 @@ public class Deployment extends BaseEntity {
         this.riskDescription = riskDescription;
         this.version = version;
         this.strategy = strategy;
+        this.stage = stage;
     }
 
     /**
@@ -125,6 +130,13 @@ public class Deployment extends BaseEntity {
      */
     public void updateStatus(DeploymentStatus status) {
         this.status = status;
+    }
+
+    /**
+     * 배포 작업 단계 업데이트
+     */
+    public void updateStage (DeploymentStage stage) {
+        this.stage = stage;
     }
 
 }

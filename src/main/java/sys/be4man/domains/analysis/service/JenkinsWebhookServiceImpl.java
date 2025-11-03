@@ -3,6 +3,7 @@ package sys.be4man.domains.analysis.service;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import sys.be4man.domains.deployment.model.type.DeploymentStage;
 import sys.be4man.domains.deployment.model.type.DeploymentStatus;
 import sys.be4man.domains.deployment.repository.DeploymentRepository;
 import sys.be4man.domains.deployment.exception.type.DeploymentExceptionType;
@@ -25,7 +26,8 @@ public class JenkinsWebhookServiceImpl implements WebhookService {
         );
 
         deployment.updateIsDeployed(isDeployed);
-        deployment.updateStatus(DeploymentStatus.DEPLOYMENT);
+        deployment.updateStage(DeploymentStage.DEPLOYMENT);
+        deployment.updateStatus(DeploymentStatus.COMPLETED);
 
     }
 }
