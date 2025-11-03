@@ -8,7 +8,7 @@ import lombok.Getter;
 @Getter
 public enum DeploymentStatus {
 
-    PENDING("승인대기"),
+    PENDING("대기"),
     REJECTED("반려"),
     IN_PROGRESS("진행중"),
     CANCELED("취소"),
