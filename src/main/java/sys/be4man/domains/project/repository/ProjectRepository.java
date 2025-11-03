@@ -18,5 +18,10 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
      * 모든 프로젝트 조회 (삭제되지 않은 것만)
      */
     List<Project> findAllByIsDeletedFalse();
+
+    /**
+     * ID 목록으로 프로젝트 조회 (삭제되지 않은 것만)
+     */
+    List<Project> findAllByIdInAndIsDeletedFalse(List<Long> ids);
 }
 

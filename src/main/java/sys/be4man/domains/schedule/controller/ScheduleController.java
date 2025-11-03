@@ -7,12 +7,19 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import sys.be4man.domains.auth.dto.AccountPrincipal;
+import sys.be4man.domains.schedule.dto.request.CreateBanRequest;
+import sys.be4man.domains.schedule.dto.response.BanResponse;
 import sys.be4man.domains.schedule.dto.response.ScheduleMetadataResponse;
 import sys.be4man.domains.schedule.service.ScheduleService;
 import sys.be4man.global.dto.response.ErrorResponse;
@@ -44,6 +51,30 @@ public class ScheduleController {
     public ResponseEntity<ScheduleMetadataResponse> getScheduleMetadata() {
         log.info("스케줄 관리 메타데이터 조회 요청");
         return ResponseEntity.ok(scheduleService.getScheduleMetadata());
+    }
+
+    /**
+     * 작업 금지 기간 생성
+     */
+    @Operation(summary = "작업 금지 기간 생성", description = "새로운 작업 금지 기간을 생성합니다.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "생성 성공",
+                    content = @Content(schema = @Schema(implementation = BanResponse.class))),
+            @ApiResponse(responseCode = "400", description = "잘못된 요청",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "401", description = "인증되지 않은 사용자",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "404", description = "프로젝트를 찾을 수 없음",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    @SecurityRequirement(name = "Bearer Authentication")
+    @PostMapping("/bans")
+    public ResponseEntity<BanResponse> createBan(
+            @Valid @RequestBody CreateBanRequest request,
+            @AuthenticationPrincipal AccountPrincipal principal
+    ) {
+        log.info("작업 금지 기간 생성 요청 - accountId: {}, title: {}", principal.accountId(), request.title());
+        return ResponseEntity.ok(scheduleService.createBan(request, principal.accountId()));
     }
 }
 
