@@ -3,6 +3,7 @@ package sys.be4man.domains.analysis.service;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import sys.be4man.domains.analysis.dto.response.JenkinsWebhooksResponseDto;
 import sys.be4man.domains.deployment.model.type.DeploymentStage;
 import sys.be4man.domains.deployment.model.type.DeploymentStatus;
 import sys.be4man.domains.deployment.repository.DeploymentRepository;
@@ -18,8 +19,8 @@ public class JenkinsWebhookServiceImpl implements WebhookService {
 
     @Override
     @Transactional
-    public void setDeployResult(long deploymentId, boolean isDeployed) {
-
+    public void setDeployResult(JenkinsWebhooksResponseDto jenkinsData, boolean isDeployed) {
+        Long deploymentId = jenkinsData.deploymentId();
         // deployment id로 배포 작업 조회
         Deployment deployment = deploymentRepository.findByIdAndIsDeletedFalse(deploymentId).orElseThrow(() -> new NotFoundException(
                 DeploymentExceptionType.DEPLOYMENT_NOT_FOUND)
