@@ -17,10 +17,10 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import sys.be4man.domains.account.model.entity.Account;
+import sys.be4man.domains.deployment.model.type.DeploymentStage;
 import sys.be4man.domains.deployment.model.type.DeploymentStatus;
 import sys.be4man.domains.deployment.model.type.DeploymentType;
 import sys.be4man.domains.deployment.model.type.RiskLevel;
-import sys.be4man.domains.common.model.type.ReportStatus;
 import sys.be4man.domains.project.model.entity.Project;
 import sys.be4man.domains.pullrequest.model.entity.PullRequest;
 import sys.be4man.global.model.entity.BaseEntity;
@@ -64,10 +64,6 @@ public class Deployment extends BaseEntity {
     @Column(name = "status", nullable = false)
     private DeploymentStatus status;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "report_status")
-    private ReportStatus reportStatus;
-
     @Column(name = "is_deployed")
     private Boolean isDeployed;
 
@@ -93,13 +89,16 @@ public class Deployment extends BaseEntity {
     @Column(name = "strategy")
     private String strategy;
 
+    @Column(name = "stage")
+    private DeploymentStage stage;
+
     @Builder
     public Deployment(
             Project project, Account issuer, PullRequest pullRequest,
             String title, String content, DeploymentType type,
-            DeploymentStatus status, ReportStatus reportStatus, RiskLevel riskLevel, String expectedDuration,
+            DeploymentStatus status, RiskLevel riskLevel, String expectedDuration,
             Boolean isDeployed, LocalDateTime scheduledAt, LocalDateTime scheduledToEndedAt,
-            String riskDescription, String version, String strategy
+            String riskDescription, String version, String strategy, DeploymentStage stage
     ) {
         this.project = project;
         this.issuer = issuer;
@@ -108,7 +107,6 @@ public class Deployment extends BaseEntity {
         this.content = content;
         this.type = type;
         this.status = status;
-        this.reportStatus = reportStatus;
         this.riskLevel = riskLevel;
         this.expectedDuration = expectedDuration;
         this.isDeployed = isDeployed;
@@ -117,6 +115,7 @@ public class Deployment extends BaseEntity {
         this.riskDescription = riskDescription;
         this.version = version;
         this.strategy = strategy;
+        this.stage = stage;
     }
 
     /**
@@ -134,48 +133,12 @@ public class Deployment extends BaseEntity {
     }
 
     /**
-     * 보고서 상태 업데이트
+     * 배포 작업 단계 업데이트
      */
-    public void updateReportStatus(ReportStatus reportStatus) {
-        this.reportStatus = reportStatus;
-    }
-
-    /**
-     * 배포 상태 조회 (DTO 호환용)
-     */
-    public DeploymentStatus getDeploymentStatus() {
-        return this.status;
-    }
-
-    /**
-     * 기안자 이름 조회 (DTO 편의 메서드)
-     */
-    public String getDrafter() {
-        return this.issuer != null ? this.issuer.getName() : null;
-    }
-
-    /**
-     * 부서명 조회 (DTO 편의 메서드)
-     */
-    public String getDepartment() {
-        if (this.issuer != null && this.issuer.getDepartment() != null) {
-            return this.issuer.getDepartment().getKoreanName();
-        }
-        return null;
-    }
-
-    /**
-     * 서비스명 조회 (DTO 편의 메서드)
-     */
-    public String getServiceName() {
-        return this.project != null ? this.project.getName() : null;
-    }
-
-    /**
-     * 작업 제목 조회 (DTO 편의 메서드)
-     */
-    public String getWorkTitle() {
-        return this.title;
+    public void updateStage (DeploymentStage stage) {
+        this.stage = stage;
     }
 
 }
+
+
