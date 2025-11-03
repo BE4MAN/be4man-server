@@ -14,7 +14,6 @@ import sys.be4man.global.exception.NotFoundException;
 @Service
 public class JenkinsWebhookServiceImpl implements WebhookService {
 
-    // TODO 실제 deployment 도메인의 DeploymentRepository 만들어지면.. 거기에 추가.
     private final DeploymentRepository deploymentRepository;
 
     @Override
