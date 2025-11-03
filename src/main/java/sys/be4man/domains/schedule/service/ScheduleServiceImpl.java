@@ -9,12 +9,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import sys.be4man.domains.account.model.entity.Account;
 import sys.be4man.domains.account.service.AccountChecker;
+import java.time.LocalDate;
+import java.util.Map;
+import java.util.stream.Collectors;
 import sys.be4man.domains.ban.model.entity.Ban;
 import sys.be4man.domains.ban.model.entity.ProjectBan;
 import sys.be4man.domains.ban.model.type.BanType;
 import sys.be4man.domains.ban.repository.BanRepository;
 import sys.be4man.domains.ban.repository.ProjectBanRepository;
-import java.time.LocalDate;
 import sys.be4man.domains.deployment.model.entity.Deployment;
 import sys.be4man.domains.deployment.repository.DeploymentRepository;
 import sys.be4man.domains.project.model.entity.Project;
@@ -151,6 +153,52 @@ public class ScheduleServiceImpl implements ScheduleService {
         // DTO 변환
         return deployments.stream()
                 .map(DeploymentScheduleResponse::from)
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<BanResponse> getBanSchedules(
+            String query,
+            LocalDate startDate,
+            LocalDate endDate,
+            BanType type,
+            List<Long> projectIds
+    ) {
+        log.info("작업 금지 기간 목록 조회 - query: {}, startDate: {}, endDate: {}, type: {}, projectIds: {}",
+                query, startDate, endDate, type, projectIds);
+
+        // Ban 목록 조회
+        List<Ban> bans = banRepository.findBans(query, startDate, endDate, type, projectIds);
+
+        if (bans.isEmpty()) {
+            return List.of();
+        }
+
+        // Ban ID 목록 추출
+        List<Long> banIds = bans.stream()
+                .map(Ban::getId)
+                .toList();
+
+        // 모든 ProjectBan 조회 (배치 조회로 N+1 방지)
+        List<ProjectBan> projectBans = projectBanRepository.findAllByBan_IdInAndIsDeletedFalse(banIds);
+
+        // Ban ID별로 프로젝트 이름 목록 그룹화
+        Map<Long, List<String>> banProjectNamesMap = projectBans.stream()
+                .collect(Collectors.groupingBy(
+                        pb -> pb.getBan().getId(),
+                        Collectors.mapping(
+                                pb -> pb.getProject().getName(),
+                                Collectors.toList()
+                        )
+                ));
+
+        // BanResponse 변환
+        return bans.stream()
+                .map(ban -> {
+                    List<String> relatedProjects = banProjectNamesMap.getOrDefault(ban.getId(), List.of());
+                    return BanResponse.from(ban, relatedProjects);
+                })
                 .toList();
     }
 }

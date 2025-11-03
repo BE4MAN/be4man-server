@@ -6,7 +6,7 @@ import org.springframework.stereotype.Repository;
 import sys.be4man.domains.ban.model.entity.Ban;
 
 @Repository
-public interface BanRepository extends JpaRepository<Ban, Long> {
+public interface BanRepository extends JpaRepository<Ban, Long>, BanRepositoryCustom {
 
     /**
      * Ban ID로 Ban 조회 (삭제되지 않은 것만)

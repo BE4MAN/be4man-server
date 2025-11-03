@@ -28,5 +28,16 @@ public interface ScheduleService {
      * 배포 작업 목록 조회
      */
     List<DeploymentScheduleResponse> getDeploymentSchedules(LocalDate startDate, LocalDate endDate);
+
+    /**
+     * 작업 금지 기간 목록 조회
+     */
+    List<BanResponse> getBanSchedules(
+            String query,
+            LocalDate startDate,
+            LocalDate endDate,
+            sys.be4man.domains.ban.model.type.BanType type,
+            List<Long> projectIds
+    );
 }
 

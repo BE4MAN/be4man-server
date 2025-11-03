@@ -22,6 +22,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import sys.be4man.domains.auth.dto.AccountPrincipal;
+import sys.be4man.domains.ban.model.type.BanType;
 import sys.be4man.domains.schedule.dto.request.CreateBanRequest;
 import sys.be4man.domains.schedule.dto.response.BanResponse;
 import sys.be4man.domains.schedule.dto.response.DeploymentScheduleResponse;
@@ -101,6 +102,30 @@ public class ScheduleController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate
     ) {
         return ResponseEntity.ok(scheduleService.getDeploymentSchedules(startDate, endDate));
+    }
+
+    /**
+     * 작업 금지 기간 목록 조회
+     */
+    @Operation(summary = "작업 금지 기간 목록 조회", description = "조건에 맞는 작업 금지 기간 목록을 조회합니다.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "조회 성공",
+                    content = @Content(schema = @Schema(implementation = BanResponse.class))),
+            @ApiResponse(responseCode = "400", description = "잘못된 요청",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "401", description = "인증되지 않은 사용자",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    @SecurityRequirement(name = "Bearer Authentication")
+    @GetMapping("/bans")
+    public ResponseEntity<List<BanResponse>> getBanSchedules(
+            @RequestParam(required = false) String query,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @RequestParam(required = false) BanType type,
+            @RequestParam(required = false) List<Long> projectIds
+    ) {
+        return ResponseEntity.ok(scheduleService.getBanSchedules(query, startDate, endDate, type, projectIds));
     }
 }
 
