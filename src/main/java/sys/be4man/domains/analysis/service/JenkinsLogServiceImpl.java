@@ -22,6 +22,7 @@ import sys.be4man.domains.analysis.model.entity.BuildRun;
 import sys.be4man.domains.analysis.model.entity.StageRun;
 import sys.be4man.domains.analysis.repository.BuildRunRepository;
 import sys.be4man.domains.analysis.repository.StageRunRepository;
+import sys.be4man.domains.analysis.util.AnsiAndHiddenCleaner;
 import sys.be4man.domains.analysis.util.DurationParser;
 import sys.be4man.domains.analysis.util.IsoLocalDateTimeParser;
 import sys.be4man.domains.analysis.util.JenkinsConsoleLogParser;
@@ -182,6 +183,7 @@ public class JenkinsLogServiceImpl implements LogService {
             // 4) 이제 최종 로그(완료본) 수집 → 스테이지 파싱
             String fullLog = fetchConsoleLog(jobName, buildNumber); // progressiveText로 완료본 취득
             List<JenkinsConsoleLogParser.StageBlock> stages = JenkinsConsoleLogParser.parse(fullLog);
+            fullLog = AnsiAndHiddenCleaner.clean(fullLog);
 
             // 5) 엔티티 조회
             Deployment deployment = deploymentRepository.findByIdAndIsDeletedFalse(deploymentId)
