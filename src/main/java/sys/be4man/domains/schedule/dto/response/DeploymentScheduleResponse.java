@@ -4,7 +4,7 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import lombok.Builder;
 import sys.be4man.domains.deployment.model.entity.Deployment;
-import sys.be4man.domains.deployment.model.type.DeploymentStatus;
+import sys.be4man.domains.deployment.model.type.DeploymentStatusMapper;
 
 /**
  * 배포 작업 스케줄 응답 DTO
@@ -13,7 +13,7 @@ import sys.be4man.domains.deployment.model.type.DeploymentStatus;
 public record DeploymentScheduleResponse(
         Long id,
         String title,
-        DeploymentStatus status,
+        String status,
         String projectName,
         String prTitle,
         String prBranch,
@@ -23,12 +23,19 @@ public record DeploymentScheduleResponse(
 
     /**
      * Deployment 엔티티로부터 DeploymentScheduleResponse 생성
+     * DeploymentStage와 DeploymentStatus 조합으로 상태 매핑
      */
     public static DeploymentScheduleResponse from(Deployment deployment) {
+        String status = DeploymentStatusMapper.map(
+                deployment.getStage(),
+                deployment.getStatus(),
+                deployment.getIsDeployed()
+        );
+        
         return DeploymentScheduleResponse.builder()
                 .id(deployment.getId())
                 .title(deployment.getTitle())
-                .status(deployment.getStatus())
+                .status(status)
                 .projectName(deployment.getProject().getName())
                 .prTitle(deployment.getPullRequest().getTitle())
                 .prBranch(deployment.getPullRequest().getBranch())

@@ -86,8 +86,8 @@ class ScheduleServiceGetDeploymentSchedulesTest {
                 .title("배포 작업 1")
                 .content("배포 내용 1")
                 .type(DeploymentType.DEPLOY)
-                .status(DeploymentStatus.PENDING)
                 .stage(DeploymentStage.PLAN)
+                .status(DeploymentStatus.PENDING)
                 .scheduledAt(LocalDateTime.of(2025, 1, 15, 10, 0))
                 .build();
         ReflectionTestUtils.setField(deployment1, "id", 1L);
@@ -99,8 +99,9 @@ class ScheduleServiceGetDeploymentSchedulesTest {
                 .title("배포 작업 2")
                 .content("배포 내용 2")
                 .type(DeploymentType.DEPLOY)
-                .status(DeploymentStatus.APPROVED)
                 .stage(DeploymentStage.DEPLOYMENT)
+                .status(DeploymentStatus.COMPLETED)
+                .isDeployed(true)
                 .scheduledAt(LocalDateTime.of(2025, 1, 16, 14, 30))
                 .build();
         ReflectionTestUtils.setField(deployment2, "id", 2L);
@@ -126,22 +127,22 @@ class ScheduleServiceGetDeploymentSchedulesTest {
         assertThat(response).isNotNull();
         assertThat(response).hasSize(2);
 
-        // 첫 번째 배포 작업 검증
+        // 첫 번째 배포 작업 검증 (PLAN-PENDING → "PLAN_PENDING")
         DeploymentScheduleResponse first = response.get(0);
         assertThat(first.id()).isEqualTo(1L);
         assertThat(first.title()).isEqualTo("배포 작업 1");
-        assertThat(first.status()).isEqualTo(DeploymentStatus.PENDING);
+        assertThat(first.status()).isEqualTo("PLAN_PENDING");
         assertThat(first.projectName()).isEqualTo("테스트 프로젝트");
         assertThat(first.prTitle()).isEqualTo("테스트 PR 제목");
         assertThat(first.prBranch()).isEqualTo("feature-branch");
         assertThat(first.scheduledDate()).isEqualTo(LocalDate.of(2025, 1, 15));
         assertThat(first.scheduledTime()).isEqualTo(LocalDateTime.of(2025, 1, 15, 10, 0).toLocalTime());
 
-        // 두 번째 배포 작업 검증
+        // 두 번째 배포 작업 검증 (DEPLOYMENT-COMPLETED + isDeployed=true → "DEPLOYMENT_SUCCESS")
         DeploymentScheduleResponse second = response.get(1);
         assertThat(second.id()).isEqualTo(2L);
         assertThat(second.title()).isEqualTo("배포 작업 2");
-        assertThat(second.status()).isEqualTo(DeploymentStatus.APPROVED);
+        assertThat(second.status()).isEqualTo("DEPLOYMENT_SUCCESS");
         assertThat(second.projectName()).isEqualTo("테스트 프로젝트");
         assertThat(second.prTitle()).isEqualTo("테스트 PR 제목");
         assertThat(second.prBranch()).isEqualTo("feature-branch");
