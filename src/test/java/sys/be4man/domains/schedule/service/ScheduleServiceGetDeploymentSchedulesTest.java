@@ -169,5 +169,58 @@ class ScheduleServiceGetDeploymentSchedulesTest {
         assertThat(response).isNotNull();
         assertThat(response).isEmpty();
     }
+
+    @Test
+    @DisplayName("배포 작업 목록 조회 - PLAN_REJECTED와 DEPLOYMENT_CANCELED 제외")
+    void getDeploymentSchedules_ExcludeRejectedAndCanceled() {
+        // given
+        LocalDate startDate = LocalDate.of(2025, 1, 15);
+        LocalDate endDate = LocalDate.of(2025, 1, 17);
+
+        Deployment planRejected = Deployment.builder()
+                .project(testProject)
+                .issuer(testAccount)
+                .pullRequest(testPullRequest)
+                .title("반려된 작업계획서")
+                .content("반려된 내용")
+                .type(DeploymentType.DEPLOY)
+                .stage(DeploymentStage.PLAN)
+                .status(DeploymentStatus.REJECTED)
+                .scheduledAt(LocalDateTime.of(2025, 1, 15, 11, 0))
+                .build();
+        ReflectionTestUtils.setField(planRejected, "id", 3L);
+
+        Deployment deploymentCanceled = Deployment.builder()
+                .project(testProject)
+                .issuer(testAccount)
+                .pullRequest(testPullRequest)
+                .title("취소된 배포")
+                .content("취소된 내용")
+                .type(DeploymentType.DEPLOY)
+                .stage(DeploymentStage.DEPLOYMENT)
+                .status(DeploymentStatus.CANCELED)
+                .scheduledAt(LocalDateTime.of(2025, 1, 15, 12, 0))
+                .build();
+        ReflectionTestUtils.setField(deploymentCanceled, "id", 4L);
+
+        // PLAN_REJECTED와 DEPLOYMENT_CANCELED는 제외되고, deployment1, deployment2만 반환
+        List<Deployment> deployments = Arrays.asList(deployment1, deployment2);
+
+        when(deploymentRepository.findScheduledDeployments(
+                startDate.atStartOfDay(),
+                endDate.atTime(23, 59, 59)
+        )).thenReturn(deployments);
+
+        // when
+        List<DeploymentScheduleResponse> response = scheduleService.getDeploymentSchedules(startDate, endDate);
+
+        // then
+        assertThat(response).isNotNull();
+        assertThat(response).hasSize(2);
+        assertThat(response).extracting(DeploymentScheduleResponse::title)
+                .containsExactly("배포 작업 1", "배포 작업 2");
+        assertThat(response).extracting(DeploymentScheduleResponse::title)
+                .doesNotContain("반려된 작업계획서", "취소된 배포");
+    }
 }
 

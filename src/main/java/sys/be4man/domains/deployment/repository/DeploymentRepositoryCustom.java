@@ -10,6 +10,8 @@ public interface DeploymentRepositoryCustom {
      * 스케줄된 배포 작업 목록 조회
      * - scheduledAt이 startDateTime ~ endDateTime 범위 내
      * - 삭제되지 않은 것만
+     * - PLAN 단계의 REJECTED 상태 제외
+     * - DEPLOYMENT 단계의 CANCELED 상태 제외
      */
     List<Deployment> findScheduledDeployments(
             LocalDateTime startDateTime,

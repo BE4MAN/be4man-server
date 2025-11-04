@@ -6,15 +6,10 @@ package sys.be4man.domains.deployment.model.type;
 public enum DeploymentStatusMapper {
 
     PLAN_PENDING("PLAN_PENDING", "작업계획서 승인 대기"),
-    PLAN_REJECTED("PLAN_REJECTED", "작업계획서 반려"),
-    PLAN_APPROVED("PLAN_APPROVED", "작업계획서 승인"),
     DEPLOYMENT_PENDING("DEPLOYMENT_PENDING", "배포 대기"),
-    DEPLOYMENT_CANCELED("DEPLOYMENT_CANCELED", "배포 취소"),
     DEPLOYMENT_IN_PROGRESS("DEPLOYMENT_IN_PROGRESS", "배포 진행중"),
     DEPLOYMENT_SUCCESS("DEPLOYMENT_SUCCESS", "배포 성공"),
-    DEPLOYMENT_FAILURE("DEPLOYMENT_FAILURE", "배포 실패"),
-    REPORT_PENDING("REPORT_PENDING", "결과보고서 승인 대기"),
-    REPORT_APPROVED("REPORT_APPROVED", "결과보고서 승인");
+    DEPLOYMENT_FAILURE("DEPLOYMENT_FAILURE", "배포 실패");
 
     private final String value;
     private final String description;
@@ -44,13 +39,10 @@ public enum DeploymentStatusMapper {
         return switch (stage) {
             case PLAN -> switch (status) {
                 case PENDING -> PLAN_PENDING.getValue();
-                case REJECTED -> PLAN_REJECTED.getValue();
-                case APPROVED -> PLAN_APPROVED.getValue();
                 default -> null;
             };
             case DEPLOYMENT -> switch (status) {
                 case PENDING -> DEPLOYMENT_PENDING.getValue();
-                case CANCELED -> DEPLOYMENT_CANCELED.getValue();
                 case IN_PROGRESS -> DEPLOYMENT_IN_PROGRESS.getValue();
                 case COMPLETED -> {
                     if (isDeployed == null) {
@@ -61,11 +53,13 @@ public enum DeploymentStatusMapper {
                 }
                 default -> null;
             };
-            case REPORT -> switch (status) {
-                case PENDING -> REPORT_PENDING.getValue();
-                case APPROVED -> REPORT_APPROVED.getValue();
-                default -> null;
-            };
+            case REPORT -> {
+                if (isDeployed == null) {
+                    yield null;
+                }
+                yield isDeployed ? DEPLOYMENT_SUCCESS.getValue()
+                        : DEPLOYMENT_FAILURE.getValue();
+            }
         };
     }
 }
