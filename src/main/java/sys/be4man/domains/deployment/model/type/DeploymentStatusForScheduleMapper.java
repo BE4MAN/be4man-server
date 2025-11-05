@@ -3,7 +3,7 @@ package sys.be4man.domains.deployment.model.type;
 /**
  * 배포 작업 상태 매퍼 DeploymentStage와 DeploymentStatus 조합으로 상태 문자열을 생성합니다.
  */
-public enum DeploymentStatusMapper {
+public enum DeploymentStatusForScheduleMapper {
 
     PLAN_PENDING("PLAN_PENDING", "작업계획서 승인 대기"),
     DEPLOYMENT_PENDING("DEPLOYMENT_PENDING", "배포 대기"),
@@ -14,7 +14,7 @@ public enum DeploymentStatusMapper {
     private final String value;
     private final String description;
 
-    DeploymentStatusMapper(String value, String description) {
+    DeploymentStatusForScheduleMapper(String value, String description) {
         this.value = value;
         this.description = description;
     }
@@ -36,6 +36,11 @@ public enum DeploymentStatusMapper {
      * @return 매핑된 상태 문자열
      */
     public static String map(DeploymentStage stage, DeploymentStatus status, Boolean isDeployed) {
+        final String s = isDeployed == null ? null :
+                isDeployed
+                        ? DEPLOYMENT_SUCCESS.getValue()
+                        : DEPLOYMENT_FAILURE.getValue();
+
         return switch (stage) {
             case PLAN -> switch (status) {
                 case PENDING -> PLAN_PENDING.getValue();
@@ -44,22 +49,10 @@ public enum DeploymentStatusMapper {
             case DEPLOYMENT -> switch (status) {
                 case PENDING -> DEPLOYMENT_PENDING.getValue();
                 case IN_PROGRESS -> DEPLOYMENT_IN_PROGRESS.getValue();
-                case COMPLETED -> {
-                    if (isDeployed == null) {
-                        yield null;
-                    }
-                    yield isDeployed ? DEPLOYMENT_SUCCESS.getValue()
-                            : DEPLOYMENT_FAILURE.getValue();
-                }
+                case COMPLETED -> s;
                 default -> null;
             };
-            case REPORT -> {
-                if (isDeployed == null) {
-                    yield null;
-                }
-                yield isDeployed ? DEPLOYMENT_SUCCESS.getValue()
-                        : DEPLOYMENT_FAILURE.getValue();
-            }
+            case REPORT -> s;
         };
     }
 }

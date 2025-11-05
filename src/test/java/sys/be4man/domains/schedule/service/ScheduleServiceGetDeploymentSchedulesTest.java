@@ -222,5 +222,179 @@ class ScheduleServiceGetDeploymentSchedulesTest {
         assertThat(response).extracting(DeploymentScheduleResponse::title)
                 .doesNotContain("반려된 작업계획서", "취소된 배포");
     }
+
+    @Test
+    @DisplayName("배포 작업 목록 조회 - 모든 status 케이스 테스트")
+    void getDeploymentSchedules_AllStatusCases() {
+        // given
+        LocalDate startDate = LocalDate.of(2025, 1, 15);
+        LocalDate endDate = LocalDate.of(2025, 1, 17);
+
+        Deployment planPending = Deployment.builder()
+                .project(testProject)
+                .issuer(testAccount)
+                .pullRequest(testPullRequest)
+                .title("PLAN_PENDING 테스트")
+                .content("내용")
+                .type(DeploymentType.DEPLOY)
+                .stage(DeploymentStage.PLAN)
+                .status(DeploymentStatus.PENDING)
+                .scheduledAt(LocalDateTime.of(2025, 1, 15, 9, 0))
+                .build();
+        ReflectionTestUtils.setField(planPending, "id", 10L);
+
+        Deployment deploymentPending = Deployment.builder()
+                .project(testProject)
+                .issuer(testAccount)
+                .pullRequest(testPullRequest)
+                .title("DEPLOYMENT_PENDING 테스트")
+                .content("내용")
+                .type(DeploymentType.DEPLOY)
+                .stage(DeploymentStage.DEPLOYMENT)
+                .status(DeploymentStatus.PENDING)
+                .scheduledAt(LocalDateTime.of(2025, 1, 15, 10, 0))
+                .build();
+        ReflectionTestUtils.setField(deploymentPending, "id", 11L);
+
+        Deployment deploymentInProgress = Deployment.builder()
+                .project(testProject)
+                .issuer(testAccount)
+                .pullRequest(testPullRequest)
+                .title("DEPLOYMENT_IN_PROGRESS 테스트")
+                .content("내용")
+                .type(DeploymentType.DEPLOY)
+                .stage(DeploymentStage.DEPLOYMENT)
+                .status(DeploymentStatus.IN_PROGRESS)
+                .scheduledAt(LocalDateTime.of(2025, 1, 15, 11, 0))
+                .build();
+        ReflectionTestUtils.setField(deploymentInProgress, "id", 12L);
+
+        Deployment deploymentCompletedSuccess = Deployment.builder()
+                .project(testProject)
+                .issuer(testAccount)
+                .pullRequest(testPullRequest)
+                .title("DEPLOYMENT_SUCCESS 테스트")
+                .content("내용")
+                .type(DeploymentType.DEPLOY)
+                .stage(DeploymentStage.DEPLOYMENT)
+                .status(DeploymentStatus.COMPLETED)
+                .isDeployed(true)
+                .scheduledAt(LocalDateTime.of(2025, 1, 15, 12, 0))
+                .build();
+        ReflectionTestUtils.setField(deploymentCompletedSuccess, "id", 13L);
+
+        Deployment deploymentCompletedFailure = Deployment.builder()
+                .project(testProject)
+                .issuer(testAccount)
+                .pullRequest(testPullRequest)
+                .title("DEPLOYMENT_FAILURE 테스트")
+                .content("내용")
+                .type(DeploymentType.DEPLOY)
+                .stage(DeploymentStage.DEPLOYMENT)
+                .status(DeploymentStatus.COMPLETED)
+                .isDeployed(false)
+                .scheduledAt(LocalDateTime.of(2025, 1, 15, 13, 0))
+                .build();
+        ReflectionTestUtils.setField(deploymentCompletedFailure, "id", 14L);
+
+        Deployment reportSuccess = Deployment.builder()
+                .project(testProject)
+                .issuer(testAccount)
+                .pullRequest(testPullRequest)
+                .title("REPORT_SUCCESS 테스트")
+                .content("내용")
+                .type(DeploymentType.DEPLOY)
+                .stage(DeploymentStage.REPORT)
+                .status(DeploymentStatus.PENDING)
+                .isDeployed(true)
+                .scheduledAt(LocalDateTime.of(2025, 1, 15, 14, 0))
+                .build();
+        ReflectionTestUtils.setField(reportSuccess, "id", 15L);
+
+        Deployment reportFailure = Deployment.builder()
+                .project(testProject)
+                .issuer(testAccount)
+                .pullRequest(testPullRequest)
+                .title("REPORT_FAILURE 테스트")
+                .content("내용")
+                .type(DeploymentType.DEPLOY)
+                .stage(DeploymentStage.REPORT)
+                .status(DeploymentStatus.APPROVED)
+                .isDeployed(false)
+                .scheduledAt(LocalDateTime.of(2025, 1, 15, 15, 0))
+                .build();
+        ReflectionTestUtils.setField(reportFailure, "id", 16L);
+
+        List<Deployment> deployments = Arrays.asList(
+                planPending,
+                deploymentPending,
+                deploymentInProgress,
+                deploymentCompletedSuccess,
+                deploymentCompletedFailure,
+                reportSuccess,
+                reportFailure
+        );
+
+        when(deploymentRepository.findScheduledDeployments(
+                startDate.atStartOfDay(),
+                endDate.atTime(23, 59, 59)
+        )).thenReturn(deployments);
+
+        // when
+        List<DeploymentScheduleResponse> response = scheduleService.getDeploymentSchedules(startDate, endDate);
+
+        // then
+        assertThat(response).isNotNull();
+        assertThat(response).hasSize(7);
+
+        // PLAN_PENDING 검증
+        DeploymentScheduleResponse planPendingResponse = response.stream()
+                .filter(r -> r.title().equals("PLAN_PENDING 테스트"))
+                .findFirst()
+                .orElseThrow();
+        assertThat(planPendingResponse.status()).isEqualTo("PLAN_PENDING");
+
+        // DEPLOYMENT_PENDING 검증
+        DeploymentScheduleResponse deploymentPendingResponse = response.stream()
+                .filter(r -> r.title().equals("DEPLOYMENT_PENDING 테스트"))
+                .findFirst()
+                .orElseThrow();
+        assertThat(deploymentPendingResponse.status()).isEqualTo("DEPLOYMENT_PENDING");
+
+        // DEPLOYMENT_IN_PROGRESS 검증
+        DeploymentScheduleResponse deploymentInProgressResponse = response.stream()
+                .filter(r -> r.title().equals("DEPLOYMENT_IN_PROGRESS 테스트"))
+                .findFirst()
+                .orElseThrow();
+        assertThat(deploymentInProgressResponse.status()).isEqualTo("DEPLOYMENT_IN_PROGRESS");
+
+        // DEPLOYMENT_SUCCESS 검증 (DEPLOYMENT-COMPLETED + isDeployed=true)
+        DeploymentScheduleResponse deploymentSuccessResponse = response.stream()
+                .filter(r -> r.title().equals("DEPLOYMENT_SUCCESS 테스트"))
+                .findFirst()
+                .orElseThrow();
+        assertThat(deploymentSuccessResponse.status()).isEqualTo("DEPLOYMENT_SUCCESS");
+
+        // DEPLOYMENT_FAILURE 검증 (DEPLOYMENT-COMPLETED + isDeployed=false)
+        DeploymentScheduleResponse deploymentFailureResponse = response.stream()
+                .filter(r -> r.title().equals("DEPLOYMENT_FAILURE 테스트"))
+                .findFirst()
+                .orElseThrow();
+        assertThat(deploymentFailureResponse.status()).isEqualTo("DEPLOYMENT_FAILURE");
+
+        // DEPLOYMENT_SUCCESS 검증 (REPORT + isDeployed=true)
+        DeploymentScheduleResponse reportSuccessResponse = response.stream()
+                .filter(r -> r.title().equals("REPORT_SUCCESS 테스트"))
+                .findFirst()
+                .orElseThrow();
+        assertThat(reportSuccessResponse.status()).isEqualTo("DEPLOYMENT_SUCCESS");
+
+        // DEPLOYMENT_FAILURE 검증 (REPORT + isDeployed=false)
+        DeploymentScheduleResponse reportFailureResponse = response.stream()
+                .filter(r -> r.title().equals("REPORT_FAILURE 테스트"))
+                .findFirst()
+                .orElseThrow();
+        assertThat(reportFailureResponse.status()).isEqualTo("DEPLOYMENT_FAILURE");
+    }
 }
 
