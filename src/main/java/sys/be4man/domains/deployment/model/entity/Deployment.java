@@ -76,17 +76,11 @@ public class Deployment extends BaseEntity {
     @Column(name = "scheduled_to_ended_at")
     private LocalDateTime scheduledToEndedAt;
 
-    @Column(name = "risk_description", columnDefinition = "TEXT")
-    private String riskDescription;
-
     @Column(name = "expected_duration")
     private String expectedDuration;
 
     @Column(name = "version", columnDefinition = "TEXT")
     private String version;
-
-    @Column(name = "strategy")
-    private String strategy;
 
     @Builder
     public Deployment(
@@ -94,7 +88,7 @@ public class Deployment extends BaseEntity {
             String title, String content, DeploymentType type,
             DeploymentStatus status, String expectedDuration,
             Boolean isDeployed, LocalDateTime scheduledAt, LocalDateTime scheduledToEndedAt,
-            String riskDescription, String version, String strategy, DeploymentStage stage
+            String version, DeploymentStage stage
     ) {
         this.project = project;
         this.issuer = issuer;
@@ -107,9 +101,7 @@ public class Deployment extends BaseEntity {
         this.isDeployed = isDeployed;
         this.scheduledAt = scheduledAt;
         this.scheduledToEndedAt = scheduledToEndedAt;
-        this.riskDescription = riskDescription;
         this.version = version;
-        this.strategy = strategy;
         this.stage = stage;
     }
 
