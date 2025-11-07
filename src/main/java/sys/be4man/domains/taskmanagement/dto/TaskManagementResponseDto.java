@@ -4,6 +4,7 @@ import lombok.*;
 import sys.be4man.domains.deployment.model.entity.Deployment;
 import sys.be4man.domains.deployment.model.type.DeploymentStatus;
 import sys.be4man.domains.deployment.model.type.DeploymentStage;
+import sys.be4man.domains.deployment.model.type.DeploymentType;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -11,6 +12,11 @@ import java.time.format.DateTimeFormatter;
 /**
  * 작업 관리 페이지 응답 DTO
  * - 프론트엔드 LogManagement 컴포넌트에 맞춘 데이터 구조
+ *
+ * 워크플로우:
+ * 1. 계획서 단계: 배포/재배포/복구 모두 "계획서"로 표시
+ * 2. 배포 시작 (scheduledAt 도달): type에 따라 "배포", "재배포", "복구"로 표시
+ * 3. 결과보고 단계: "결과보고"로 표시
  */
 @Getter
 @Setter
@@ -24,8 +30,8 @@ public class TaskManagementResponseDto {
     private String department;              // 부서
     private String serviceName;             // 서비스명
     private String taskTitle;               // 작업 제목
-    private String stage;                   // 처리 단계 (계획서/배포/결과보고)
-    private String status;                  // 처리 상태 (승인대기/반려/진행중/취소/완료)
+    private String stage;                   // 처리 단계 (계획서/배포/재배포/복구/결과보고)
+    private String status;                  // 처리 상태 (승인대기/대기/진행중/종료/완료/취소)
     private String completionTime;          // 완료 시각 (YYYY.MM.DD HH:mm)
     private String result;                  // 배포 결과 (성공/실패/null)
 
@@ -39,15 +45,11 @@ public class TaskManagementResponseDto {
         this.serviceName = getServiceName(deployment);
         this.taskTitle = deployment.getTitle();
 
-        // 처리 단계 매핑 (DeploymentStage 사용)
-        this.stage = deployment.getStage() != null
-            ? deployment.getStage().getKoreanName()
-            : determineStageFromStatus(deployment.getStatus());
+        // 처리 단계 결정 (stage + type 조합)
+        this.stage = determineDisplayStage(deployment);
 
-        // 처리 상태 매핑 (DeploymentStatus의 koreanName 직접 사용)
-        this.status = deployment.getStatus() != null
-            ? deployment.getStatus().getKoreanName()
-            : null;
+        // 처리 상태 결정
+        this.status = determineDisplayStatus(deployment);
 
         // 완료 시각 포맷팅
         this.completionTime = formatCompletionTime(deployment);
@@ -81,35 +83,77 @@ public class TaskManagementResponseDto {
     }
 
     /**
-     * DeploymentStatus로부터 처리 단계 결정
-     * - 계획서: stage가 PLAN이고 PENDING만
-     * - 배포: stage가 DEPLOYMENT이고 (IN_PROGRESS, COMPLETED, CANCELED)
-     * - 결과보고: stage가 REPORT이고 (PENDING, REJECTED, APPROVED)
+     * 작업 관리 목록에 표시할 "작업 단계" 결정
      *
-     * stage가 없는 경우 status로 추론 (하위 호환성)
+     * 규칙:
+     * 1. stage == PLAN: "계획서" (배포/재배포/복구 구분 없이 모두 "계획서")
+     * 2. stage == RETRY: "재배포"
+     * 3. stage == ROLLBACK: "복구"
+     * 4. stage == REPORT: "결과보고"
+     * 5. stage == DRAFT: "임시저장"
+     * 6. 그 외 (또는 type 사용): deployment.type에 따라 결정
+     *    - DEPLOY: "배포"
+     *    - REDEPLOY: "재배포"
+     *    - ROLLBACK: "복구"
      */
-    private String determineStageFromStatus(DeploymentStatus deploymentStatus) {
-        if (deploymentStatus == null) {
+    private String determineDisplayStage(Deployment deployment) {
+        DeploymentStage stage = deployment.getStage();
+        DeploymentType type = deployment.getType();
+
+        // stage가 있는 경우 우선 사용
+        if (stage != null) {
+            switch (stage) {
+                case PLAN:
+                    return "계획서";
+                case RETRY:
+                    return "재배포";
+                case ROLLBACK:
+                    return "복구";
+                case REPORT:
+                    return "결과보고";
+                case DRAFT:
+                    return "임시저장";
+                default:
+                    break;
+            }
+        }
+
+        // stage가 없거나 예외 케이스: type으로 결정
+        if (type != null) {
+            switch (type) {
+                case DEPLOY:
+                    return "배포";
+                case REDEPLOY:
+                    return "재배포";
+                case ROLLBACK:
+                    return "복구";
+                default:
+                    return type.getKoreanName();
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * 작업 관리 목록에 표시할 "작업 상태" 결정
+     *
+     * 규칙:
+     * - PENDING: "대기" (계획서 승인 대기 또는 결과보고 승인 대기)
+     * - APPROVED: "승인"
+     * - IN_PROGRESS: "진행중"
+     * - COMPLETED: "완료"
+     * - REJECTED: "반려"
+     * - CANCELED: "취소"
+     */
+    private String determineDisplayStatus(Deployment deployment) {
+        DeploymentStatus status = deployment.getStatus();
+
+        if (status == null) {
             return null;
         }
 
-        // stage가 없는 경우 status로 추론
-        switch (deploymentStatus) {
-            case PENDING:
-                return "계획서"; // 또는 "결과보고" (stage로 구분 필요)
-
-            case IN_PROGRESS:
-            case COMPLETED:
-            case CANCELED:
-                return "배포";
-
-            case REJECTED:
-            case APPROVED:
-                return "결과보고";
-
-            default:
-                return null;
-        }
+        return status.getKoreanName();
     }
 
     /**

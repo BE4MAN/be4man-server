@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import sys.be4man.domains.taskmanagement.dto.TaskDetailResponseDto;
 import sys.be4man.domains.taskmanagement.dto.TaskManagementResponseDto;
 import sys.be4man.domains.taskmanagement.dto.TaskManagementSearchDto;
 import sys.be4man.domains.taskmanagement.service.TaskManagementService;
@@ -78,7 +79,7 @@ public class TaskManagementController {
     }
 
     /**
-     * 특정 작업 상세 조회
+     * 특정 작업 상세 조회 (기본)
      *
      * GET /api/tasks/{taskId}
      *
@@ -97,6 +98,36 @@ public class TaskManagementController {
             return ResponseEntity.ok(task);
         } catch (IllegalArgumentException e) {
             log.warn("작업 상세 조회 실패 - taskId: {}, error: {}", taskId, e.getMessage());
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    /**
+     * 작업 전체 상세 조회 (타임라인, 승인 정보, Jenkins 로그 포함)
+     *
+     * GET /api/tasks/{taskId}/full
+     *
+     * @param taskId 작업 ID
+     * @return 작업 전체 상세 정보 (타임라인, 승인자 목록, Jenkins 로그, 계획서/결과보고 내용)
+     */
+    @GetMapping("/{taskId}/full")
+    public ResponseEntity<TaskDetailResponseDto> getTaskDetailFull(
+            @PathVariable Long taskId
+    ) {
+        log.info("작업 전체 상세 조회 요청 - taskId: {}", taskId);
+
+        try {
+            TaskDetailResponseDto taskDetail = taskManagementService.getTaskDetailFull(taskId);
+            log.info("작업 전체 상세 조회 완료 - taskId: {}, timeline steps: {}, " +
+                    "plan approvers: {}, report approvers: {}",
+                    taskId,
+                    taskDetail.getTimeline() != null ? taskDetail.getTimeline().size() : 0,
+                    taskDetail.getPlanApproval() != null ? taskDetail.getPlanApproval().getTotalApprovers() : 0,
+                    taskDetail.getReportApproval() != null ? taskDetail.getReportApproval().getTotalApprovers() : 0
+            );
+            return ResponseEntity.ok(taskDetail);
+        } catch (IllegalArgumentException e) {
+            log.warn("작업 전체 상세 조회 실패 - taskId: {}, error: {}", taskId, e.getMessage());
             return ResponseEntity.notFound().build();
         }
     }

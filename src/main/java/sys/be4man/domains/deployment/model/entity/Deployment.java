@@ -57,10 +57,6 @@ public class Deployment extends BaseEntity {
     private String content;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "type", nullable = false)
-    private DeploymentType type;
-
-    @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
     private DeploymentStatus status;
 
@@ -73,21 +69,15 @@ public class Deployment extends BaseEntity {
     @Column(name = "scheduled_to_ended_at")
     private LocalDateTime scheduledToEndedAt;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "risk_level", nullable = false)
-    private RiskLevel riskLevel;
-
-    @Column(name = "risk_description", columnDefinition = "TEXT")
-    private String riskDescription;
-
     @Column(name = "expected_duration")
     private String expectedDuration;
 
     @Column(name = "version", columnDefinition = "TEXT")
     private String version;
 
-    @Column(name = "strategy")
-    private String strategy;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "type")
+    private DeploymentType type;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "stage")
@@ -108,14 +98,11 @@ public class Deployment extends BaseEntity {
         this.content = content;
         this.type = type;
         this.status = status;
-        this.riskLevel = riskLevel;
         this.expectedDuration = expectedDuration;
         this.isDeployed = isDeployed;
         this.scheduledAt = scheduledAt;
         this.scheduledToEndedAt = scheduledToEndedAt;
-        this.riskDescription = riskDescription;
         this.version = version;
-        this.strategy = strategy;
         this.stage = stage;
     }
 

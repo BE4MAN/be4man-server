@@ -28,7 +28,7 @@ public enum DeploymentStatus {
     APPROVED("승인"),
     REJECTED("반려"),         // 결과보고 반려 (모든 승인자의 내역에 표시)
     CANCELED("취소"),         // 배포 중 취소
-    IN_PROGRESS("배포중"),    // 배포 진행 중
+    IN_PROGRESS("진행중"),    // 배포 진행 중
     COMPLETED("완료");        // 배포 종료     // 결과보고 최종 완료
 
     private final String koreanName;
@@ -37,5 +37,3 @@ public enum DeploymentStatus {
         this.koreanName = koreanName;
     }
 }
-
-
