@@ -66,16 +66,9 @@ class ScheduleServiceGetDeploymentSchedulesTest {
         ReflectionTestUtils.setField(testProject, "id", 1L);
 
         testPullRequest = PullRequest.builder()
-                .repositoryDefaultBranch("main")
-                .repositoryName("test-repo")
+                .prNumber(123)
                 .repositoryUrl("https://github.com/test/test-repo")
                 .branch("feature-branch")
-                .prNumber(123)
-                .filesChanged(5)
-                .title("테스트 PR 제목")
-                .linesAdded(100)
-                .linesRemoved(50)
-                .commitCount(3)
                 .build();
         ReflectionTestUtils.setField(testPullRequest, "id", 1L);
 
@@ -121,7 +114,8 @@ class ScheduleServiceGetDeploymentSchedulesTest {
         )).thenReturn(deployments);
 
         // when
-        List<DeploymentScheduleResponse> response = scheduleService.getDeploymentSchedules(startDate, endDate);
+        List<DeploymentScheduleResponse> response = scheduleService.getDeploymentSchedules(
+                startDate, endDate);
 
         // then
         assertThat(response).isNotNull();
@@ -136,7 +130,8 @@ class ScheduleServiceGetDeploymentSchedulesTest {
         assertThat(first.prTitle()).isEqualTo("테스트 PR 제목");
         assertThat(first.prBranch()).isEqualTo("feature-branch");
         assertThat(first.scheduledDate()).isEqualTo(LocalDate.of(2025, 1, 15));
-        assertThat(first.scheduledTime()).isEqualTo(LocalDateTime.of(2025, 1, 15, 10, 0).toLocalTime());
+        assertThat(first.scheduledTime()).isEqualTo(
+                LocalDateTime.of(2025, 1, 15, 10, 0).toLocalTime());
 
         // 두 번째 배포 작업 검증 (DEPLOYMENT-COMPLETED + isDeployed=true → "DEPLOYMENT_SUCCESS")
         DeploymentScheduleResponse second = response.get(1);
@@ -147,7 +142,8 @@ class ScheduleServiceGetDeploymentSchedulesTest {
         assertThat(second.prTitle()).isEqualTo("테스트 PR 제목");
         assertThat(second.prBranch()).isEqualTo("feature-branch");
         assertThat(second.scheduledDate()).isEqualTo(LocalDate.of(2025, 1, 16));
-        assertThat(second.scheduledTime()).isEqualTo(LocalDateTime.of(2025, 1, 16, 14, 30).toLocalTime());
+        assertThat(second.scheduledTime()).isEqualTo(
+                LocalDateTime.of(2025, 1, 16, 14, 30).toLocalTime());
     }
 
     @Test
@@ -163,7 +159,8 @@ class ScheduleServiceGetDeploymentSchedulesTest {
         )).thenReturn(List.of());
 
         // when
-        List<DeploymentScheduleResponse> response = scheduleService.getDeploymentSchedules(startDate, endDate);
+        List<DeploymentScheduleResponse> response = scheduleService.getDeploymentSchedules(
+                startDate, endDate);
 
         // then
         assertThat(response).isNotNull();
@@ -212,7 +209,8 @@ class ScheduleServiceGetDeploymentSchedulesTest {
         )).thenReturn(deployments);
 
         // when
-        List<DeploymentScheduleResponse> response = scheduleService.getDeploymentSchedules(startDate, endDate);
+        List<DeploymentScheduleResponse> response = scheduleService.getDeploymentSchedules(
+                startDate, endDate);
 
         // then
         assertThat(response).isNotNull();
@@ -341,7 +339,8 @@ class ScheduleServiceGetDeploymentSchedulesTest {
         )).thenReturn(deployments);
 
         // when
-        List<DeploymentScheduleResponse> response = scheduleService.getDeploymentSchedules(startDate, endDate);
+        List<DeploymentScheduleResponse> response = scheduleService.getDeploymentSchedules(
+                startDate, endDate);
 
         // then
         assertThat(response).isNotNull();
