@@ -15,6 +15,8 @@ public record DeploymentScheduleResponse(
         String title,
         String status,
         String projectName,
+        String prTitle,
+        String prBranch,
         LocalDate scheduledDate,
         LocalTime scheduledTime
 ) {
@@ -34,6 +36,8 @@ public record DeploymentScheduleResponse(
                 .title(deployment.getTitle())
                 .status(status)
                 .projectName(deployment.getProject().getName())
+                .prTitle(deployment.getPullRequest().getTitle())
+                .prBranch(deployment.getPullRequest().getBranch())
                 .scheduledDate(deployment.getScheduledAt().toLocalDate())
                 .scheduledTime(deployment.getScheduledAt().toLocalTime())
                 .build();

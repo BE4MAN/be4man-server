@@ -2,6 +2,7 @@ package sys.be4man.domains.deployment.repository;
 
 import static sys.be4man.domains.deployment.model.entity.QDeployment.deployment;
 import static sys.be4man.domains.project.model.entity.QProject.project;
+import static sys.be4man.domains.pullrequest.model.entity.QPullRequest.pullRequest;
 
 import com.querydsl.core.BooleanBuilder;
 import com.querydsl.jpa.impl.JPAQueryFactory;
@@ -40,6 +41,7 @@ public class DeploymentRepositoryImpl implements DeploymentRepositoryCustom {
         return queryFactory
                 .selectFrom(deployment)
                 .innerJoin(deployment.project, project).fetchJoin()
+                .innerJoin(deployment.pullRequest, pullRequest).fetchJoin()
                 .where(builder)
                 .orderBy(deployment.scheduledAt.asc())
                 .fetch();
