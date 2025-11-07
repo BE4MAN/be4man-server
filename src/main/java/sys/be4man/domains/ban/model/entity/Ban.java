@@ -33,6 +33,16 @@ public class Ban extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "title", length = 52, nullable = false)
+    private String title;
+
+    @Column(name = "description", columnDefinition = "TEXT")
+    private String description;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "type", nullable = false)
+    private BanType type;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "account_id", nullable = false)
     private Account account;
@@ -42,16 +52,6 @@ public class Ban extends BaseEntity {
 
     @Column(name = "ended_at", nullable = false)
     private LocalDateTime endedAt;
-
-    @Column(name = "title", length = 25, nullable = false)
-    private String title;
-
-    @Column(name = "description", columnDefinition = "TEXT", nullable = false)
-    private String description;
-
-    @Enumerated(EnumType.STRING)
-    @Column(name = "type", nullable = false)
-    private BanType type;
 
     @Builder
     public Ban(Account account, LocalDateTime startedAt, LocalDateTime endedAt,

@@ -8,8 +8,9 @@ import lombok.Getter;
 @Getter
 public enum BanType {
     DB_MIGRATION("DB 마이그레이션"),
-    BLACK_OUT("사고"),
-    EVENT("이벤트");
+    ACCIDENT("재난 재해"),
+    MAINTENANCE("점검"),
+    EXTERNAL_SCHEDULE("외부 일정");
 
     private final String koreanName;
 

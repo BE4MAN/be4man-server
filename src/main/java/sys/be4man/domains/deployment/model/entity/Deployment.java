@@ -20,7 +20,6 @@ import sys.be4man.domains.account.model.entity.Account;
 import sys.be4man.domains.deployment.model.type.DeploymentStage;
 import sys.be4man.domains.deployment.model.type.DeploymentStatus;
 import sys.be4man.domains.deployment.model.type.DeploymentType;
-import sys.be4man.domains.deployment.model.type.RiskLevel;
 import sys.be4man.domains.project.model.entity.Project;
 import sys.be4man.domains.pullrequest.model.entity.PullRequest;
 import sys.be4man.global.model.entity.BaseEntity;
@@ -38,18 +37,6 @@ public class Deployment extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "project_id", nullable = false)
-    private Project project;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "issuer_id", nullable = false)
-    private Account issuer;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "pull_request_id", nullable = false)
-    private PullRequest pullRequest;
-
     @Column(name = "title", nullable = false)
     private String title;
 
@@ -60,6 +47,22 @@ public class Deployment extends BaseEntity {
     @Column(name = "type", nullable = false)
     private DeploymentType type;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "issuer_id", nullable = false)
+    private Account issuer;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "project_id", nullable = false)
+    private Project project;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "pull_request_id", nullable = false)
+    private PullRequest pullRequest;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "stage", nullable = false)
+    private DeploymentStage stage;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
     private DeploymentStatus status;
@@ -67,18 +70,11 @@ public class Deployment extends BaseEntity {
     @Column(name = "is_deployed")
     private Boolean isDeployed;
 
-    @Column(name = "scheduled_at")
+    @Column(name = "scheduled_at", nullable = false)
     private LocalDateTime scheduledAt;
 
     @Column(name = "scheduled_to_ended_at")
     private LocalDateTime scheduledToEndedAt;
-
-    @Enumerated(EnumType.STRING)
-    @Column(name = "risk_level", nullable = false)
-    private RiskLevel riskLevel;
-
-    @Column(name = "risk_description", columnDefinition = "TEXT")
-    private String riskDescription;
 
     @Column(name = "expected_duration")
     private String expectedDuration;
@@ -86,20 +82,13 @@ public class Deployment extends BaseEntity {
     @Column(name = "version", columnDefinition = "TEXT")
     private String version;
 
-    @Column(name = "strategy")
-    private String strategy;
-
-    @Enumerated(EnumType.STRING)
-    @Column(name = "stage")
-    private DeploymentStage stage;
-
     @Builder
     public Deployment(
             Project project, Account issuer, PullRequest pullRequest,
             String title, String content, DeploymentType type,
-            DeploymentStatus status, RiskLevel riskLevel, String expectedDuration,
+            DeploymentStatus status, String expectedDuration,
             Boolean isDeployed, LocalDateTime scheduledAt, LocalDateTime scheduledToEndedAt,
-            String riskDescription, String version, String strategy, DeploymentStage stage
+            String version, DeploymentStage stage
     ) {
         this.project = project;
         this.issuer = issuer;
@@ -108,14 +97,11 @@ public class Deployment extends BaseEntity {
         this.content = content;
         this.type = type;
         this.status = status;
-        this.riskLevel = riskLevel;
         this.expectedDuration = expectedDuration;
         this.isDeployed = isDeployed;
         this.scheduledAt = scheduledAt;
         this.scheduledToEndedAt = scheduledToEndedAt;
-        this.riskDescription = riskDescription;
         this.version = version;
-        this.strategy = strategy;
         this.stage = stage;
     }
 
@@ -136,7 +122,7 @@ public class Deployment extends BaseEntity {
     /**
      * 배포 작업 단계 업데이트
      */
-    public void updateStage (DeploymentStage stage) {
+    public void updateStage(DeploymentStage stage) {
         this.stage = stage;
     }
 
