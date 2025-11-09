@@ -27,15 +27,17 @@ public class ConsoleLogController {
     private final BuildRunService buildRunService;
     private final StageRunService stageRunService;
 
-    @GetMapping("/{deploymentId}")
-    public ResponseEntity<BuildRunConsoleLogResponseDto> getConsoleLogByDeploymentId(
-            @PathVariable Long deploymentId) {
-        return ResponseEntity.ok(buildRunService.getConsoleLogByDeploymentId(deploymentId));
+    @GetMapping("/{deploymentId}/{buildRunId}")
+    public ResponseEntity<BuildRunConsoleLogResponseDto> getConsoleLogByDeploymentIdAndBuildRunId(
+            @PathVariable Long deploymentId, @PathVariable Long buildRunId) {
+        return ResponseEntity.ok(
+                buildRunService.getConsoleLogByDeploymentIdAndBuildRunId(deploymentId, buildRunId));
     }
 
-    @GetMapping("/{deploymentId}/all-stages")
-    public ResponseEntity<List<StageRunResponseDto>> getAllStageRunsByDeploymentId(
-            @PathVariable Long deploymentId) {
-        return ResponseEntity.ok(stageRunService.getAllStageRunsByDeploymentId(deploymentId));
+    @GetMapping("/{buildRunId}/all-stages")
+    public ResponseEntity<List<StageRunResponseDto>> getAllStageRunsByBuildRunId(
+            @PathVariable Long buildRunId) {
+        return ResponseEntity.ok(
+                stageRunService.getAllStageRunsByBuildRunId(buildRunId));
     }
 }

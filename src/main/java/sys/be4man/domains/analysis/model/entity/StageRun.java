@@ -2,6 +2,7 @@ package sys.be4man.domains.analysis.model.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import sys.be4man.domains.analysis.model.type.ProblemType;
 import sys.be4man.global.model.entity.BaseEntity;
 
 @Entity
@@ -35,6 +36,11 @@ public class StageRun extends BaseEntity {
     @Column(name = "problem_solution", columnDefinition = "TEXT")
     private String problemSolution;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "problem_type")
+    private ProblemType problemType;
+
+
     @Builder
     public StageRun(BuildRun buildRun, String stageName, Boolean isSuccess, Long orderIndex,
             String log, String problemSummary, String problemSolution) {
@@ -47,8 +53,9 @@ public class StageRun extends BaseEntity {
         this.problemSolution = problemSolution;
     }
 
-    public void updateAnalysis(String problemSummary, String problemSolution) {
+    public void updateAnalysis(String problemSummary, String problemSolution, ProblemType problemType) {
         this.problemSummary = problemSummary;
         this.problemSolution = problemSolution;
+        this.problemType = problemType;
     }
 }
