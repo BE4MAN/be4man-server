@@ -13,7 +13,7 @@ import sys.be4man.domains.analysis.repository.StageRunRepository;
 public class StageRunService {
 
     private final StageRunRepository stageRunRepository;
-    public List<StageRunResponseDto> getAllStageRunsByDeploymentId(Long deploymentId) {
-        return stageRunRepository.findAllStageRunsByDeploymentId(deploymentId);
+    public List<StageRunResponseDto> getAllStageRunsByBuildRunId(Long buildRunId) {
+        return stageRunRepository.findAllStageRunsByBuildRunId(buildRunId);
     }
 }
