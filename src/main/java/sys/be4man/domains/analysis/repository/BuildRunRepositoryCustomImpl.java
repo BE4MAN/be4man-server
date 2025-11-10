@@ -3,6 +3,7 @@ package sys.be4man.domains.analysis.repository;
 import com.querydsl.core.types.Projections;
 import com.querydsl.core.types.dsl.Expressions;
 import com.querydsl.jpa.impl.JPAQueryFactory;
+import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import sys.be4man.domains.analysis.dto.response.BuildResultResponseDto;
@@ -19,7 +20,8 @@ public class BuildRunRepositoryCustomImpl implements BuildRunRepositoryCustom {
     QPullRequest pullRequest = QPullRequest.pullRequest;
 
     @Override
-    public Optional<BuildResultResponseDto> findBuildResultByDeploymentId(Long deploymentId) {
+    public List<BuildResultResponseDto> findAllBuildResultsByDeploymentId(Long deploymentId) {
+
         var prUrlExpr = Expressions.stringTemplate(
                 "concat(concat({0}, {1}), {2})",
                 pullRequest.repositoryUrl,
@@ -27,9 +29,10 @@ public class BuildRunRepositoryCustomImpl implements BuildRunRepositoryCustom {
                 pullRequest.prNumber
         );
 
-        return Optional.ofNullable(jpaQueryFactory.select(Projections.constructor(
+        return jpaQueryFactory.select(Projections.constructor(
                                 BuildResultResponseDto.class,
                                 deployment.id.as("deploymentId"),
+                                buildRun.id.as("buildRunId"),
                                 deployment.isDeployed.as("isDeployed"),
                                 buildRun.duration.as("duration"),
                                 buildRun.startedAt.as("startedAt"),
@@ -43,6 +46,39 @@ public class BuildRunRepositoryCustomImpl implements BuildRunRepositoryCustom {
                 .join(deployment.pullRequest, pullRequest)
                 .where(
                         deployment.id.eq(deploymentId),
+                        pullRequest.isDeleted.isFalse(),
+                        deployment.isDeleted.isFalse(),
+                        buildRun.isDeleted.isFalse()
+                ).fetch();
+    }
+
+    @Override
+    public Optional<BuildResultResponseDto> findBuildResultByDeploymentId(Long deploymentId, Long buildRunId) {
+        var prUrlExpr = Expressions.stringTemplate(
+                "concat(concat({0}, {1}), {2})",
+                pullRequest.repositoryUrl,
+                Expressions.constant("/pull/"),
+                pullRequest.prNumber
+        );
+
+        return Optional.ofNullable(jpaQueryFactory.select(Projections.constructor(
+                                BuildResultResponseDto.class,
+                                deployment.id.as("deploymentId"),
+                                buildRun.id.as("buildRunId"),
+                                deployment.isDeployed.as("isDeployed"),
+                                buildRun.duration.as("duration"),
+                                buildRun.startedAt.as("startedAt"),
+                                buildRun.endedAt.as("endedAt"),
+                                pullRequest.prNumber.as("prNumber"),
+                                prUrlExpr.as("prUrl")
+                        )
+                )
+                .from(buildRun)
+                .join(buildRun.deployment, deployment)
+                .join(deployment.pullRequest, pullRequest)
+                .where(
+                        deployment.id.eq(deploymentId),
+                        buildRun.id.eq(buildRunId),
                         pullRequest.isDeleted.isFalse(),
                         deployment.isDeleted.isFalse(),
                         buildRun.isDeleted.isFalse()

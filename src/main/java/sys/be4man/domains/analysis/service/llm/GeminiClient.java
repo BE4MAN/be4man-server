@@ -3,13 +3,14 @@ package sys.be4man.domains.analysis.service.llm;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.genai.types.GenerateContentResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import com.google.genai.Client;
 import sys.be4man.domains.analysis.service.llm.LlmClient;
-
-@Component
+@Slf4j
 @RequiredArgsConstructor
+@Component
 public class GeminiClient implements LlmClient {
 
     @Value("${gemini.api.key}")
@@ -43,7 +44,7 @@ public class GeminiClient implements LlmClient {
             System.err.println("JSON 파싱 중 오류 발생: " + e.getMessage());
             e.printStackTrace();
             // 오류 발생 시 빈 객체 또는 적절한 오류 객체를 반환하도록 처리
-            return new AnalysisResult("JSON 파싱 실패", "로그를 확인하고 DTO와 JSON 응답 구조를 검토하세요.");
+            return new AnalysisResult("JSON 파싱 실패", "로그를 확인하고 DTO와 JSON 응답 구조를 검토하세요.", "실패 타입 없음");
         }
     }
 }
