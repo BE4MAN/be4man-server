@@ -9,6 +9,8 @@ import sys.be4man.global.exception.type.ExceptionType;
 @RequiredArgsConstructor
 public enum ScheduleExceptionType implements ExceptionType {
     BAN_NOT_FOUND("작업 금지 기간을 찾을 수 없습니다"),
+    BAN_ALREADY_CANCELED("이미 취소된 작업 금지 기간입니다"),
+    INSUFFICIENT_PERMISSION("권한이 부족합니다"),
     INVALID_DATE_RANGE("종료일이 시작일보다 이전입니다"),
     INVALID_TIME_RANGE("종료시간이 시작시간보다 이전입니다"),
     INVALID_DURATION("금지 기간 시간이 올바르지 않습니다"),
