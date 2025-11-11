@@ -22,6 +22,7 @@ import sys.be4man.domains.schedule.dto.response.BanResponse;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -88,7 +89,9 @@ class ScheduleServiceGetBanSchedulesTest {
                 .title("작업 금지 기간 1")
                 .description("설명 1")
                 .type(BanType.MAINTENANCE)
-                .startedAt(LocalDateTime.of(2025, 1, 15, 9, 0))
+                .startDate(LocalDate.of(2025, 1, 15))
+                .startTime(LocalTime.of(9, 0))
+                .durationHours(9)
                 .endedAt(LocalDateTime.of(2025, 1, 15, 18, 0))
                 .build();
         ReflectionTestUtils.setField(ban1, "id", 1L);
@@ -98,7 +101,9 @@ class ScheduleServiceGetBanSchedulesTest {
                 .title("작업 금지 기간 2")
                 .description("설명 2")
                 .type(BanType.DB_MIGRATION)
-                .startedAt(LocalDateTime.of(2025, 1, 16, 10, 0))
+                .startDate(LocalDate.of(2025, 1, 16))
+                .startTime(LocalTime.of(10, 0))
+                .durationHours(2)
                 .endedAt(LocalDateTime.of(2025, 1, 16, 12, 0))
                 .build();
         ReflectionTestUtils.setField(ban2, "id", 2L);
@@ -149,9 +154,12 @@ class ScheduleServiceGetBanSchedulesTest {
         assertThat(first.type()).isEqualTo(BanType.MAINTENANCE.name());
         assertThat(first.startDate()).isEqualTo("2025-01-15");
         assertThat(first.startTime()).isEqualTo("09:00");
-        assertThat(first.endDate()).isEqualTo("2025-01-15");
-        assertThat(first.endTime()).isEqualTo("18:00");
-        assertThat(first.relatedProjects()).containsExactly("프로젝트 1", "프로젝트 2");
+        assertThat(first.endedAt()).isEqualTo("2025-01-15T18:00");
+        assertThat(first.durationHours()).isEqualTo(9);
+        assertThat(first.services()).containsExactly("프로젝트 1", "프로젝트 2");
+        assertThat(first.registrant()).isEqualTo("테스트 계정");
+        assertThat(first.registrantDepartment()).isEqualTo(JobDepartment.IT.name());
+        assertThat(first.recurrenceType()).isNull();
 
         // 두 번째 작업 금지 기간 검증
         BanResponse second = response.get(1);
@@ -161,9 +169,11 @@ class ScheduleServiceGetBanSchedulesTest {
         assertThat(second.type()).isEqualTo(BanType.DB_MIGRATION.name());
         assertThat(second.startDate()).isEqualTo("2025-01-16");
         assertThat(second.startTime()).isEqualTo("10:00");
-        assertThat(second.endDate()).isEqualTo("2025-01-16");
-        assertThat(second.endTime()).isEqualTo("12:00");
-        assertThat(second.relatedProjects()).isEmpty();
+        assertThat(second.endedAt()).isEqualTo("2025-01-16T12:00");
+        assertThat(second.durationHours()).isEqualTo(2);
+        assertThat(second.services()).isEmpty();
+        assertThat(second.registrant()).isEqualTo("테스트 계정");
+        assertThat(second.registrantDepartment()).isEqualTo(JobDepartment.IT.name());
     }
 
     @Test

@@ -112,6 +112,7 @@ public class ScheduleServiceImpl implements ScheduleService {
         log.info("작업 금지 기간 생성 요청 - accountId: {}, title: {}", accountId, request.title());
 
         Account account = accountChecker.checkAccountExists(accountId);
+        validatePermission(account.getRole());
 
         List<Project> projects = projectRepository.findAllByIdInAndIsDeletedFalse(
                 request.relatedProjectIds());

@@ -10,7 +10,10 @@ import sys.be4man.domains.project.model.entity.Project;
  */
 public record ScheduleMetadataResponse(
         List<ProjectMetadata> projects,
-        List<BanMetadata> banTypes
+        List<BanMetadata> restrictedPeriodTypes,
+        List<EnumMetadata> recurrenceTypes,
+        List<EnumMetadata> recurrenceWeekdays,
+        List<EnumMetadata> recurrenceWeeksOfMonth
 ) {
 
     /**
@@ -51,6 +54,16 @@ public record ScheduleMetadataResponse(
                     .label(banType.getKoreanName())
                     .build();
         }
+    }
+
+    /**
+     * Enum 메타데이터 (반복 관련)
+     */
+    @Builder
+    public record EnumMetadata(
+            String value,
+            String label
+    ) {
     }
 }
 

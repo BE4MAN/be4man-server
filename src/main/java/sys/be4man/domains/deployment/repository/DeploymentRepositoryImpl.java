@@ -24,10 +24,44 @@ public class DeploymentRepositoryImpl implements DeploymentRepositoryCustom {
             LocalDateTime startDateTime,
             LocalDateTime endDateTime
     ) {
-        BooleanBuilder builder = new BooleanBuilder()
-                .and(deployment.isDeleted.eq(false))
+        BooleanBuilder builder = buildBaseCondition()
                 .and(deployment.scheduledAt.goe(startDateTime))
                 .and(deployment.scheduledAt.loe(endDateTime))
+                .and(buildScheduledDeploymentsFilter());
+
+        return queryFactory
+                .selectFrom(deployment)
+                .innerJoin(deployment.project, project).fetchJoin()
+                .where(builder)
+                .orderBy(deployment.scheduledAt.asc())
+                .fetch();
+    }
+
+    @Override
+    public List<Deployment> findOverlappingDeployments(
+            LocalDateTime banStartDateTime,
+            LocalDateTime banEndDateTime,
+            List<Long> projectIds
+    ) {
+        BooleanBuilder builder = buildBaseCondition()
+                .and(buildActiveDeploymentFilter())
+                .and(deployment.project.id.in(projectIds))
+                .and(buildOverlapCondition(banStartDateTime, banEndDateTime));
+
+        return queryFactory
+                .selectFrom(deployment)
+                .innerJoin(deployment.project, project).fetchJoin()
+                .where(builder)
+                .fetch();
+    }
+
+    private BooleanBuilder buildBaseCondition() {
+        return new BooleanBuilder()
+                .and(deployment.isDeleted.eq(false));
+    }
+
+    private BooleanBuilder buildScheduledDeploymentsFilter() {
+        return new BooleanBuilder()
                 .and(
                         deployment.stage.ne(DeploymentStage.PLAN)
                                 .or(deployment.status.ne(DeploymentStatus.REJECTED))
@@ -36,12 +70,24 @@ public class DeploymentRepositoryImpl implements DeploymentRepositoryCustom {
                         deployment.stage.ne(DeploymentStage.DEPLOYMENT)
                                 .or(deployment.status.ne(DeploymentStatus.CANCELED))
                 );
+    }
 
-        return queryFactory
-                .selectFrom(deployment)
-                .innerJoin(deployment.project, project).fetchJoin()
-                .where(builder)
-                .orderBy(deployment.scheduledAt.asc())
-                .fetch();
+    private BooleanBuilder buildActiveDeploymentFilter() {
+        return new BooleanBuilder()
+                .and(deployment.status.ne(DeploymentStatus.CANCELED))
+                .and(deployment.status.ne(DeploymentStatus.COMPLETED))
+                .and(deployment.stage.ne(DeploymentStage.REPORT));
+    }
+
+    private BooleanBuilder buildOverlapCondition(
+            LocalDateTime banStartDateTime,
+            LocalDateTime banEndDateTime
+    ) {
+        return new BooleanBuilder()
+                .and(deployment.scheduledAt.lt(banEndDateTime))
+                .and(
+                        deployment.scheduledToEndedAt.isNull()
+                                .or(deployment.scheduledToEndedAt.gt(banStartDateTime))
+                );
     }
 }

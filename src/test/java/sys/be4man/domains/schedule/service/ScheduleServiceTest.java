@@ -29,6 +29,18 @@ class ScheduleServiceTest {
     @Mock
     private ProjectRepository projectRepository;
 
+    @Mock
+    private sys.be4man.domains.ban.repository.BanRepository banRepository;
+
+    @Mock
+    private sys.be4man.domains.ban.repository.ProjectBanRepository projectBanRepository;
+
+    @Mock
+    private sys.be4man.domains.account.service.AccountChecker accountChecker;
+
+    @Mock
+    private sys.be4man.domains.deployment.repository.DeploymentRepository deploymentRepository;
+
     @InjectMocks
     private ScheduleServiceImpl scheduleService;
 
@@ -85,21 +97,38 @@ class ScheduleServiceTest {
         assertThat(response.projects().get(1).name()).isEqualTo("프로젝트 A");
 
         // BanType enum 값 확인
-        assertThat(response.banTypes()).hasSize(4);
-        assertThat(response.banTypes()).extracting("value")
+        assertThat(response.restrictedPeriodTypes()).hasSize(4);
+        assertThat(response.restrictedPeriodTypes()).extracting("value")
                 .containsExactlyInAnyOrder(
                         BanType.DB_MIGRATION.name(),
                         BanType.ACCIDENT.name(),
                         BanType.MAINTENANCE.name(),
                         BanType.EXTERNAL_SCHEDULE.name()
                 );
-        assertThat(response.banTypes()).extracting("label")
+        assertThat(response.restrictedPeriodTypes()).extracting("label")
                 .containsExactlyInAnyOrder(
                         BanType.DB_MIGRATION.getKoreanName(),
                         BanType.ACCIDENT.getKoreanName(),
                         BanType.MAINTENANCE.getKoreanName(),
                         BanType.EXTERNAL_SCHEDULE.getKoreanName()
                 );
+
+        // RecurrenceType 확인 (NONE 포함)
+        assertThat(response.recurrenceTypes()).hasSize(4);
+        assertThat(response.recurrenceTypes().get(0).value()).isEqualTo("NONE");
+        assertThat(response.recurrenceTypes().get(0).label()).isEqualTo("없음");
+        assertThat(response.recurrenceTypes()).extracting("value")
+                .containsExactly("NONE", "DAILY", "WEEKLY", "MONTHLY");
+
+        // RecurrenceWeekday 확인
+        assertThat(response.recurrenceWeekdays()).hasSize(7);
+        assertThat(response.recurrenceWeekdays()).extracting("value")
+                .containsExactly("MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN");
+
+        // RecurrenceWeekOfMonth 확인
+        assertThat(response.recurrenceWeeksOfMonth()).hasSize(5);
+        assertThat(response.recurrenceWeeksOfMonth()).extracting("value")
+                .containsExactly("FIRST", "SECOND", "THIRD", "FOURTH", "FIFTH");
     }
 
     @Test
@@ -114,7 +143,10 @@ class ScheduleServiceTest {
         // then
         assertThat(response).isNotNull();
         assertThat(response.projects()).isEmpty();
-        assertThat(response.banTypes()).hasSize(4);
+        assertThat(response.restrictedPeriodTypes()).hasSize(4);
+        assertThat(response.recurrenceTypes()).hasSize(4);
+        assertThat(response.recurrenceWeekdays()).hasSize(7);
+        assertThat(response.recurrenceWeeksOfMonth()).hasSize(5);
     }
 }
 
