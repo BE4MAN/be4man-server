@@ -3,16 +3,16 @@ package sys.be4man.domains.approval.model.type;
 import lombok.Getter;
 
 /**
- * 승인 문서 상태
+ * 결재 상태
  */
 @Getter
 public enum ApprovalStatus {
-    DRAFT("임시저장"),
-    REQUESTED("요청됨"),
+    REQUESTED("승인요청"),
     PENDING("승인대기"),
     APPROVED("승인완료"),
     REJECTED("반려"),
-    CANCELED("취소");
+    CANCELED("취소"),
+    DRAFT("임시저장");
 
     private final String koreanName;
 

@@ -19,7 +19,6 @@ import lombok.NoArgsConstructor;
 import sys.be4man.domains.account.model.entity.Account;
 import sys.be4man.domains.deployment.model.type.DeploymentStage;
 import sys.be4man.domains.deployment.model.type.DeploymentStatus;
-import sys.be4man.domains.deployment.model.type.DeploymentType;
 import sys.be4man.domains.project.model.entity.Project;
 import sys.be4man.domains.pullrequest.model.entity.PullRequest;
 import sys.be4man.global.model.entity.BaseEntity;
@@ -42,10 +41,6 @@ public class Deployment extends BaseEntity {
 
     @Column(name = "content", columnDefinition = "TEXT", nullable = false)
     private String content;
-
-    @Enumerated(EnumType.STRING)
-    @Column(name = "type", nullable = false)
-    private DeploymentType type;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "issuer_id", nullable = false)
@@ -85,7 +80,7 @@ public class Deployment extends BaseEntity {
     @Builder
     public Deployment(
             Project project, Account issuer, PullRequest pullRequest,
-            String title, String content, DeploymentType type,
+            String title, String content,
             DeploymentStatus status, String expectedDuration,
             Boolean isDeployed, LocalDateTime scheduledAt, LocalDateTime scheduledToEndedAt,
             String version, DeploymentStage stage
@@ -95,7 +90,6 @@ public class Deployment extends BaseEntity {
         this.pullRequest = pullRequest;
         this.title = title;
         this.content = content;
-        this.type = type;
         this.status = status;
         this.expectedDuration = expectedDuration;
         this.isDeployed = isDeployed;
