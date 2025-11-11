@@ -84,10 +84,7 @@ public class DeploymentRepositoryImpl implements DeploymentRepositoryCustom {
             LocalDateTime banEndDateTime
     ) {
         return new BooleanBuilder()
-                .and(deployment.scheduledAt.lt(banEndDateTime))
-                .and(
-                        deployment.scheduledToEndedAt.isNull()
-                                .or(deployment.scheduledToEndedAt.gt(banStartDateTime))
-                );
+                .and(deployment.scheduledAt.goe(banStartDateTime))
+                .and(deployment.scheduledAt.lt(banEndDateTime));
     }
 }

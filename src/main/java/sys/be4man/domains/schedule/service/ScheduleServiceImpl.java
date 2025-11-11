@@ -2,6 +2,8 @@ package sys.be4man.domains.schedule.service;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -26,11 +28,15 @@ import sys.be4man.domains.deployment.model.type.DeploymentStatus;
 import sys.be4man.domains.deployment.repository.DeploymentRepository;
 import sys.be4man.domains.project.model.entity.Project;
 import sys.be4man.domains.project.repository.ProjectRepository;
+import sys.be4man.domains.project.repository.RelatedProjectRepository;
 import sys.be4man.domains.schedule.dto.request.CreateBanRequest;
+import sys.be4man.domains.schedule.dto.response.BanConflictCheckResponse;
 import sys.be4man.domains.schedule.dto.response.BanResponse;
+import sys.be4man.domains.schedule.dto.response.ConflictingDeploymentResponse;
 import sys.be4man.domains.schedule.dto.response.DeploymentScheduleResponse;
 import sys.be4man.domains.schedule.dto.response.ScheduleMetadataResponse;
 import sys.be4man.domains.schedule.exception.type.ScheduleExceptionType;
+import sys.be4man.domains.schedule.util.RecurrenceCalculator;
 import sys.be4man.global.exception.BadRequestException;
 import sys.be4man.global.exception.ForbiddenException;
 import sys.be4man.global.exception.NotFoundException;
@@ -48,6 +54,7 @@ public class ScheduleServiceImpl implements ScheduleService {
     private final ProjectBanRepository projectBanRepository;
     private final AccountChecker accountChecker;
     private final DeploymentRepository deploymentRepository;
+    private final RelatedProjectRepository relatedProjectRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -60,18 +67,21 @@ public class ScheduleServiceImpl implements ScheduleService {
                 .map(ScheduleMetadataResponse.ProjectMetadata::from)
                 .toList();
 
-        List<ScheduleMetadataResponse.BanMetadata> restrictedPeriodTypes = Stream.of(BanType.values())
+        List<ScheduleMetadataResponse.BanMetadata> restrictedPeriodTypes = Stream.of(
+                        BanType.values())
                 .map(ScheduleMetadataResponse.BanMetadata::from)
                 .toList();
 
         List<ScheduleMetadataResponse.EnumMetadata> recurrenceTypes = buildRecurrenceTypesMetadata();
-        List<ScheduleMetadataResponse.EnumMetadata> recurrenceWeekdays = Stream.of(RecurrenceWeekday.values())
+        List<ScheduleMetadataResponse.EnumMetadata> recurrenceWeekdays = Stream.of(
+                        RecurrenceWeekday.values())
                 .map(weekday -> ScheduleMetadataResponse.EnumMetadata.builder()
                         .value(weekday.name())
                         .label(weekday.getKoreanName())
                         .build())
                 .toList();
-        List<ScheduleMetadataResponse.EnumMetadata> recurrenceWeeksOfMonth = Stream.of(RecurrenceWeekOfMonth.values())
+        List<ScheduleMetadataResponse.EnumMetadata> recurrenceWeeksOfMonth = Stream.of(
+                        RecurrenceWeekOfMonth.values())
                 .map(weekOfMonth -> ScheduleMetadataResponse.EnumMetadata.builder()
                         .value(weekOfMonth.name())
                         .label(weekOfMonth.getKoreanName())
@@ -121,20 +131,14 @@ public class ScheduleServiceImpl implements ScheduleService {
             throw new NotFoundException(ScheduleExceptionType.PROJECT_NOT_FOUND);
         }
 
-        LocalDateTime startedAt = null;
-        if (request.startDate() != null) {
-            startedAt = LocalDateTime.of(request.startDate(), request.startTime());
-        }
-        if (request.recurrenceType() == null && startedAt == null) {
-            throw new BadRequestException(ScheduleExceptionType.START_DATE_REQUIRED);
-        }
+        LocalDateTime startedAt = LocalDateTime.of(request.startDate(), request.startTime());
 
         LocalDateTime endedAt = request.endedAt();
-        if (endedAt == null && startedAt != null) {
+        if (endedAt == null) {
             endedAt = startedAt.plusHours(request.durationHours());
         }
 
-        if (startedAt != null && endedAt != null && endedAt.isBefore(startedAt)) {
+        if (endedAt.isBefore(startedAt)) {
             throw new BadRequestException(ScheduleExceptionType.INVALID_TIME_RANGE);
         }
 
@@ -175,9 +179,7 @@ public class ScheduleServiceImpl implements ScheduleService {
                 .toList();
         projectBanRepository.saveAll(projectBans);
 
-        if (startedAt != null && endedAt != null) {
-            cancelOverlappingDeployments(startedAt, endedAt, request.relatedProjectIds());
-        }
+        cancelOverlappingDeploymentsForBan(savedBan, request.relatedProjectIds());
 
         List<String> relatedProjectNames = projects.stream()
                 .map(Project::getName)
@@ -187,33 +189,45 @@ public class ScheduleServiceImpl implements ScheduleService {
     }
 
     /**
-     * Ban과 겹치는 Deployment를 취소
+     * Ban과 겹치는 Deployment를 취소 (반복 Ban 포함)
      */
-    private void cancelOverlappingDeployments(
-            LocalDateTime banStartDateTime,
-            LocalDateTime banEndDateTime,
-            List<Long> projectIds
-    ) {
-        List<Deployment> overlappingDeployments = deploymentRepository.findOverlappingDeployments(
-                banStartDateTime,
-                banEndDateTime,
-                projectIds
-        );
+    private void cancelOverlappingDeploymentsForBan(Ban ban, List<Long> projectIds) {
+        LocalDate queryStartDate = ban.getStartDate();
+        LocalDate queryEndDate = ban.getRecurrenceEndDate() != null
+                ? ban.getRecurrenceEndDate()
+                : queryStartDate.plusYears(1);
 
-        if (overlappingDeployments.isEmpty()) {
+        List<RecurrenceCalculator.RecurrenceOccurrence> occurrences =
+                RecurrenceCalculator.calculateRecurrenceDates(ban, queryStartDate, queryEndDate);
+
+        List<Deployment> allOverlappingDeployments = new ArrayList<>();
+        for (RecurrenceCalculator.RecurrenceOccurrence occurrence : occurrences) {
+            List<Deployment> overlapping = deploymentRepository.findOverlappingDeployments(
+                    occurrence.getStartDateTime(),
+                    occurrence.getEndDateTime(),
+                    projectIds
+            );
+            allOverlappingDeployments.addAll(overlapping);
+        }
+
+        if (allOverlappingDeployments.isEmpty()) {
             return;
         }
 
-        log.info("Ban 생성으로 인한 Deployment 취소 - banStart: {}, banEnd: {}, 취소할 Deployment 수: {}",
-                banStartDateTime, banEndDateTime, overlappingDeployments.size());
+        List<Deployment> uniqueDeployments = allOverlappingDeployments.stream()
+                .distinct()
+                .toList();
 
-        for (Deployment deployment : overlappingDeployments) {
+        log.info("Ban 생성으로 인한 Deployment 취소 - banId: {}, 취소할 Deployment 수: {}",
+                 ban.getId(), uniqueDeployments.size());
+
+        for (Deployment deployment : uniqueDeployments) {
             deployment.updateStatus(DeploymentStatus.CANCELED);
             log.info("Deployment 취소 - deploymentId: {}, title: {}, scheduledAt: {}",
-                    deployment.getId(), deployment.getTitle(), deployment.getScheduledAt());
+                     deployment.getId(), deployment.getTitle(), deployment.getScheduledAt());
         }
 
-        deploymentRepository.saveAll(overlappingDeployments);
+        deploymentRepository.saveAll(uniqueDeployments);
     }
 
     @Override
@@ -247,7 +261,11 @@ public class ScheduleServiceImpl implements ScheduleService {
         log.info("작업 금지 기간 목록 조회 - query: {}, startDate: {}, endDate: {}, type: {}, projectIds: {}",
                  query, startDate, endDate, type, projectIds);
 
-        List<Ban> bans = banRepository.findBans(query, startDate, endDate, type, projectIds);
+        LocalDate effectiveStartDate = startDate != null ? startDate : LocalDate.now();
+        LocalDate effectiveEndDate = endDate != null ? endDate : effectiveStartDate.plusMonths(1);
+
+        List<Ban> bans = banRepository.findBans(query, effectiveStartDate, effectiveEndDate, type,
+                                                projectIds);
 
         if (bans.isEmpty()) {
             return List.of();
@@ -269,13 +287,29 @@ public class ScheduleServiceImpl implements ScheduleService {
                         )
                 ));
 
-        return bans.stream()
-                .map(ban -> {
-                    List<String> relatedProjects = banProjectNamesMap.getOrDefault(ban.getId(),
-                                                                                   List.of());
-                    return BanResponse.from(ban, relatedProjects);
-                })
-                .toList();
+        List<BanResponse> responses = new ArrayList<>();
+        for (Ban ban : bans) {
+            List<String> relatedProjects = banProjectNamesMap.getOrDefault(ban.getId(), List.of());
+
+            if (ban.getRecurrenceType() == null) {
+                responses.add(BanResponse.from(ban, relatedProjects));
+            } else {
+                List<RecurrenceCalculator.RecurrenceOccurrence> occurrences =
+                        RecurrenceCalculator.calculateRecurrenceDates(ban, effectiveStartDate,
+                                                                      effectiveEndDate);
+
+                for (RecurrenceCalculator.RecurrenceOccurrence occurrence : occurrences) {
+                    responses.add(BanResponse.from(
+                            ban,
+                            relatedProjects,
+                            occurrence.getStartDateTime().toLocalDate(),
+                            occurrence.getEndDateTime()
+                    ));
+                }
+            }
+        }
+
+        return responses;
     }
 
     @Override
@@ -293,6 +327,77 @@ public class ScheduleServiceImpl implements ScheduleService {
         banRepository.save(ban);
 
         log.info("작업 금지 기간 취소 완료 - banId: {}, accountId: {}", banId, accountId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public BanConflictCheckResponse checkBanConflicts(
+            List<Long> projectIds,
+            LocalDate startDate,
+            LocalTime startTime,
+            Integer durationHours,
+            RecurrenceType recurrenceType,
+            RecurrenceWeekday recurrenceWeekday,
+            RecurrenceWeekOfMonth recurrenceWeekOfMonth,
+            LocalDate recurrenceEndDate,
+            LocalDate queryStartDate,
+            LocalDate queryEndDate
+    ) {
+        log.info(
+                "Ban 충돌 체크 - projectIds: {}, startDate: {}, startTime: {}, recurrenceType: {}, queryRange: {} ~ {}",
+                projectIds, startDate, startTime, recurrenceType, queryStartDate, queryEndDate);
+
+        Ban tempBan = Ban.builder()
+                .account(null)
+                .startDate(startDate)
+                .startTime(startTime)
+                .durationHours(durationHours)
+                .endedAt(null)
+                .recurrenceType(recurrenceType)
+                .recurrenceWeekday(recurrenceWeekday)
+                .recurrenceWeekOfMonth(recurrenceWeekOfMonth)
+                .recurrenceEndDate(recurrenceEndDate)
+                .title("")
+                .description("")
+                .type(BanType.MAINTENANCE)
+                .build();
+
+        List<RecurrenceCalculator.RecurrenceOccurrence> occurrences =
+                RecurrenceCalculator.calculateRecurrenceDates(tempBan, queryStartDate,
+                                                              queryEndDate);
+
+        List<Deployment> allConflictingDeployments = new ArrayList<>();
+        for (RecurrenceCalculator.RecurrenceOccurrence occurrence : occurrences) {
+            List<Deployment> conflicting = deploymentRepository.findOverlappingDeployments(
+                    occurrence.getStartDateTime(),
+                    occurrence.getEndDateTime(),
+                    projectIds
+            );
+            allConflictingDeployments.addAll(conflicting);
+        }
+
+        List<ConflictingDeploymentResponse> uniqueConflicts = allConflictingDeployments.stream()
+                .distinct()
+                .map(deployment -> {
+                    List<String> relatedProjectNames = relatedProjectRepository.findByDeployment(
+                                    deployment)
+                            .stream()
+                            .map(relatedProject -> relatedProject.getProject().getName())
+                            .distinct()
+                            .sorted()
+                            .toList();
+
+                    return new ConflictingDeploymentResponse(
+                            deployment.getId(),
+                            deployment.getTitle(),
+                            relatedProjectNames,
+                            deployment.getScheduledAt(),
+                            deployment.getScheduledToEndedAt()
+                    );
+                })
+                .toList();
+
+        return new BanConflictCheckResponse(uniqueConflicts);
     }
 
     /**
