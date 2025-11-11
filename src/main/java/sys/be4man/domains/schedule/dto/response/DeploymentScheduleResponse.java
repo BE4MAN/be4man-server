@@ -15,8 +15,6 @@ public record DeploymentScheduleResponse(
         String title,
         String status,
         String projectName,
-        String prTitle,
-        String prBranch,
         LocalDate scheduledDate,
         LocalTime scheduledTime
 ) {

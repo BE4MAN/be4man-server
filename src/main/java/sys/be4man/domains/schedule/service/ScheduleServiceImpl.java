@@ -98,22 +98,15 @@ public class ScheduleServiceImpl implements ScheduleService {
     }
 
     /**
-     * 반복 유형 메타데이터 생성 (NONE 포함)
+     * 반복 유형 메타데이터 생성
      */
     private List<ScheduleMetadataResponse.EnumMetadata> buildRecurrenceTypesMetadata() {
-        List<ScheduleMetadataResponse.EnumMetadata> types = Stream.of(RecurrenceType.values())
+        return Stream.of(RecurrenceType.values())
                 .map(type -> ScheduleMetadataResponse.EnumMetadata.builder()
                         .value(type.name())
                         .label(type.getKoreanName())
                         .build())
                 .collect(Collectors.toList());
-
-        types.add(0, ScheduleMetadataResponse.EnumMetadata.builder()
-                .value("NONE")
-                .label("없음")
-                .build());
-
-        return types;
     }
 
     @Override
