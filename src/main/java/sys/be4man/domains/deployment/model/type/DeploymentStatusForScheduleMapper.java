@@ -53,6 +53,10 @@ public enum DeploymentStatusForScheduleMapper {
                 default -> null;
             };
             case REPORT -> s;
+            // 밑에 3개 스테이지 추가 된거라서 null로 일단 추가한거 나중에 확인해주세요
+            case RETRY -> null;
+            case ROLLBACK -> null;
+            case DRAFT -> null;
         };
     }
 }
