@@ -24,6 +24,7 @@ public record CreateBanRequest(
         @NotBlank(message = "설명은 필수입니다")
         String description,
 
+        @NotNull(message = "시작일은 필수입니다")
         LocalDate startDate,
 
         @NotNull(message = "시작시간은 필수입니다")
@@ -50,13 +51,6 @@ public record CreateBanRequest(
         LocalDate recurrenceEndDate
 ) {
 
-    @AssertTrue(message = "반복이 없는 경우 시작일(startDate)은 필수입니다")
-    public boolean isStartDateValidForSingleEvent() {
-        if (recurrenceType == null) {
-            return startDate != null;
-        }
-        return true;
-    }
 
     @AssertTrue(message = "주간 반복은 요일(recurrenceWeekday)이 필요합니다")
     public boolean isWeeklyRecurrenceValid() {

@@ -1,5 +1,7 @@
 package sys.be4man.domains.schedule.dto.response;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import sys.be4man.domains.ban.model.entity.Ban;
@@ -30,11 +32,17 @@ public record BanResponse(
      * Ban 엔티티와 연관 프로젝트 이름 목록으로부터 BanResponse 생성
      */
     public static BanResponse from(Ban ban, List<String> services) {
-        String startDate = ban.getStartDate() != null ? ban.getStartDate().toString() : null;
-        String startTime = ban.getStartTime() != null ? ban.getStartTime().format(TIME_FORMATTER) : null;
+        return from(ban, services, ban.getStartDate(), ban.getComputedEndDateTime());
+    }
 
-        var computedEndDateTime = ban.getComputedEndDateTime();
-        String endedAt = computedEndDateTime != null ? computedEndDateTime.toString() : null;
+    /**
+     * Ban 엔티티와 실제 발생 일정으로부터 BanResponse 생성 (반복 Ban용)
+     */
+    public static BanResponse from(Ban ban, List<String> services, LocalDate occurrenceDate,
+            LocalDateTime occurrenceEndDateTime) {
+        String startDate = occurrenceDate.toString();
+        String startTime = ban.getStartTime().format(TIME_FORMATTER);
+        String endedAt = occurrenceEndDateTime != null ? occurrenceEndDateTime.toString() : null;
 
         String recurrenceType = ban.getRecurrenceType() != null ? ban.getRecurrenceType().name() : null;
         String recurrenceWeekday = ban.getRecurrenceWeekday() != null

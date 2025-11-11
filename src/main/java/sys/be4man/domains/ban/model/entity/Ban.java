@@ -54,7 +54,7 @@ public class Ban extends BaseEntity {
     @JoinColumn(name = "account_id", nullable = false)
     private Account account;
 
-    @Column(name = "start_date")
+    @Column(name = "start_date", nullable = false)
     private LocalDate startDate;
 
     @Column(name = "start_time", nullable = false)
@@ -97,7 +97,7 @@ public class Ban extends BaseEntity {
             BanType type
     ) {
         this.account = account;
-        this.startDate = startDate;
+        this.startDate = Objects.requireNonNull(startDate, "startDate must not be null");
         this.startTime = Objects.requireNonNull(startTime, "startTime must not be null");
         this.durationHours = Objects.requireNonNull(durationHours,
                                                     "durationHours must not be null");
@@ -146,12 +146,9 @@ public class Ban extends BaseEntity {
     }
 
     /**
-     * 시작 일시 계산 (단일 일정이 아닌 경우 null 허용)
+     * 시작 일시 계산
      */
     public LocalDateTime getStartDateTime() {
-        if (startDate == null) {
-            return null;
-        }
         return LocalDateTime.of(startDate, startTime);
     }
 
@@ -162,11 +159,7 @@ public class Ban extends BaseEntity {
         if (endedAt != null) {
             return endedAt;
         }
-        LocalDateTime startDateTime = getStartDateTime();
-        if (startDateTime == null) {
-            return null;
-        }
-        return startDateTime.plusHours(durationHours);
+        return getStartDateTime().plusHours(durationHours);
     }
 
     /**
