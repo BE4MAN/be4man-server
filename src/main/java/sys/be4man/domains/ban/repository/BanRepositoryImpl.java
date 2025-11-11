@@ -39,20 +39,8 @@ public class BanRepositoryImpl implements BanRepositoryCustom {
         }
 
         if (startDate != null || endDate != null) {
-            if (startDate != null && endDate != null) {
-                LocalDateTime startDateTime = startDate.atStartOfDay();
-                LocalDateTime endDateTime = endDate.atTime(23, 59, 59);
-                builder.and(
-                        ban.startedAt.loe(endDateTime)
-                                .and(ban.endedAt.goe(startDateTime))
-                );
-            } else if (startDate != null) {
-                LocalDateTime startDateTime = startDate.atStartOfDay();
-                builder.and(ban.endedAt.goe(startDateTime));
-            } else if (endDate != null) {
-                LocalDateTime endDateTime = endDate.atTime(23, 59, 59);
-                builder.and(ban.startedAt.loe(endDateTime));
-            }
+            BooleanBuilder overlapCondition = buildDateRangeCondition(startDate, endDate);
+            builder.and(overlapCondition);
         }
 
         if (type != null) {
@@ -66,7 +54,7 @@ public class BanRepositoryImpl implements BanRepositoryCustom {
                                     .select(projectBan.ban.id)
                                     .from(projectBan)
                                     .where(projectBan.project.id.in(projectIds)
-                                                   .and(projectBan.isDeleted.eq(false)))
+                                            .and(projectBan.isDeleted.eq(false)))
                     )
             );
         }
@@ -74,8 +62,40 @@ public class BanRepositoryImpl implements BanRepositoryCustom {
         return queryFactory
                 .selectFrom(ban)
                 .where(builder)
-                .orderBy(ban.startedAt.asc())
+                .orderBy(
+                        ban.startDate.asc().nullsLast(),
+                        ban.startTime.asc()
+                )
                 .fetch();
+    }
+
+    private BooleanBuilder buildDateRangeCondition(LocalDate startDate, LocalDate endDate) {
+        BooleanBuilder singleEventCondition = new BooleanBuilder()
+                .and(ban.startDate.isNotNull());
+
+        if (startDate != null) {
+            LocalDateTime startDateTime = startDate.atStartOfDay();
+            singleEventCondition.and(
+                    ban.endedAt.isNull().or(ban.endedAt.goe(startDateTime))
+            );
+        }
+
+        if (endDate != null) {
+            singleEventCondition.and(ban.startDate.loe(endDate));
+        }
+
+        BooleanBuilder recurrenceCondition = new BooleanBuilder()
+                .and(ban.recurrenceType.isNotNull());
+
+        if (startDate != null) {
+            recurrenceCondition.and(
+                    ban.recurrenceEndDate.isNull().or(ban.recurrenceEndDate.goe(startDate))
+            );
+        }
+
+        return new BooleanBuilder()
+                .or(singleEventCondition)
+                .or(recurrenceCondition);
     }
 }
 

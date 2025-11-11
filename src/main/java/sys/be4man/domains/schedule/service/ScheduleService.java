@@ -39,5 +39,11 @@ public interface ScheduleService {
             sys.be4man.domains.ban.model.type.BanType type,
             List<Long> projectIds
     );
+
+    /**
+     * 작업 금지 기간 취소
+     * - MANAGER, HEAD 권한만 가능
+     */
+    void cancelBan(Long banId, Long accountId);
 }
 

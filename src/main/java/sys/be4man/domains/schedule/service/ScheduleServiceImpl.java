@@ -11,13 +11,18 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import sys.be4man.domains.account.model.entity.Account;
+import sys.be4man.domains.account.model.type.Role;
 import sys.be4man.domains.account.service.AccountChecker;
 import sys.be4man.domains.ban.model.entity.Ban;
 import sys.be4man.domains.ban.model.entity.ProjectBan;
 import sys.be4man.domains.ban.model.type.BanType;
+import sys.be4man.domains.ban.model.type.RecurrenceType;
+import sys.be4man.domains.ban.model.type.RecurrenceWeekOfMonth;
+import sys.be4man.domains.ban.model.type.RecurrenceWeekday;
 import sys.be4man.domains.ban.repository.BanRepository;
 import sys.be4man.domains.ban.repository.ProjectBanRepository;
 import sys.be4man.domains.deployment.model.entity.Deployment;
+import sys.be4man.domains.deployment.model.type.DeploymentStatus;
 import sys.be4man.domains.deployment.repository.DeploymentRepository;
 import sys.be4man.domains.project.model.entity.Project;
 import sys.be4man.domains.project.repository.ProjectRepository;
@@ -27,6 +32,7 @@ import sys.be4man.domains.schedule.dto.response.DeploymentScheduleResponse;
 import sys.be4man.domains.schedule.dto.response.ScheduleMetadataResponse;
 import sys.be4man.domains.schedule.exception.type.ScheduleExceptionType;
 import sys.be4man.global.exception.BadRequestException;
+import sys.be4man.global.exception.ForbiddenException;
 import sys.be4man.global.exception.NotFoundException;
 
 /**
@@ -54,11 +60,50 @@ public class ScheduleServiceImpl implements ScheduleService {
                 .map(ScheduleMetadataResponse.ProjectMetadata::from)
                 .toList();
 
-        List<ScheduleMetadataResponse.BanMetadata> banTypes = Stream.of(BanType.values())
+        List<ScheduleMetadataResponse.BanMetadata> restrictedPeriodTypes = Stream.of(BanType.values())
                 .map(ScheduleMetadataResponse.BanMetadata::from)
                 .toList();
 
-        return new ScheduleMetadataResponse(projects, banTypes);
+        List<ScheduleMetadataResponse.EnumMetadata> recurrenceTypes = buildRecurrenceTypesMetadata();
+        List<ScheduleMetadataResponse.EnumMetadata> recurrenceWeekdays = Stream.of(RecurrenceWeekday.values())
+                .map(weekday -> ScheduleMetadataResponse.EnumMetadata.builder()
+                        .value(weekday.name())
+                        .label(weekday.getKoreanName())
+                        .build())
+                .toList();
+        List<ScheduleMetadataResponse.EnumMetadata> recurrenceWeeksOfMonth = Stream.of(RecurrenceWeekOfMonth.values())
+                .map(weekOfMonth -> ScheduleMetadataResponse.EnumMetadata.builder()
+                        .value(weekOfMonth.name())
+                        .label(weekOfMonth.getKoreanName())
+                        .build())
+                .toList();
+
+        return new ScheduleMetadataResponse(
+                projects,
+                restrictedPeriodTypes,
+                recurrenceTypes,
+                recurrenceWeekdays,
+                recurrenceWeeksOfMonth
+        );
+    }
+
+    /**
+     * 반복 유형 메타데이터 생성 (NONE 포함)
+     */
+    private List<ScheduleMetadataResponse.EnumMetadata> buildRecurrenceTypesMetadata() {
+        List<ScheduleMetadataResponse.EnumMetadata> types = Stream.of(RecurrenceType.values())
+                .map(type -> ScheduleMetadataResponse.EnumMetadata.builder()
+                        .value(type.name())
+                        .label(type.getKoreanName())
+                        .build())
+                .collect(Collectors.toList());
+
+        types.add(0, ScheduleMetadataResponse.EnumMetadata.builder()
+                .value("NONE")
+                .label("없음")
+                .build());
+
+        return types;
     }
 
     @Override
@@ -66,10 +111,8 @@ public class ScheduleServiceImpl implements ScheduleService {
     public BanResponse createBan(CreateBanRequest request, Long accountId) {
         log.info("작업 금지 기간 생성 요청 - accountId: {}, title: {}", accountId, request.title());
 
-        validateDateAndTime(request.startDate(), request.startTime(), request.endDate(),
-                            request.endTime());
-
         Account account = accountChecker.checkAccountExists(accountId);
+        validatePermission(account.getRole());
 
         List<Project> projects = projectRepository.findAllByIdInAndIsDeletedFalse(
                 request.relatedProjectIds());
@@ -78,17 +121,51 @@ public class ScheduleServiceImpl implements ScheduleService {
             throw new NotFoundException(ScheduleExceptionType.PROJECT_NOT_FOUND);
         }
 
-        LocalDateTime startedAt = LocalDateTime.of(request.startDate(), request.startTime());
-        LocalDateTime endedAt = LocalDateTime.of(request.endDate(), request.endTime());
+        LocalDateTime startedAt = null;
+        if (request.startDate() != null) {
+            startedAt = LocalDateTime.of(request.startDate(), request.startTime());
+        }
+        if (request.recurrenceType() == null && startedAt == null) {
+            throw new BadRequestException(ScheduleExceptionType.START_DATE_REQUIRED);
+        }
 
-        final Ban savedBan = banRepository.save(Ban.builder()
-                                                        .account(account)
-                                                        .title(request.title())
-                                                        .description(request.description())
-                                                        .type(request.type())
-                                                        .startedAt(startedAt)
-                                                        .endedAt(endedAt)
-                                                        .build());
+        LocalDateTime endedAt = request.endedAt();
+        if (endedAt == null && startedAt != null) {
+            endedAt = startedAt.plusHours(request.durationHours());
+        }
+
+        if (startedAt != null && endedAt != null && endedAt.isBefore(startedAt)) {
+            throw new BadRequestException(ScheduleExceptionType.INVALID_TIME_RANGE);
+        }
+
+        Ban newBan = Ban.builder()
+                .account(account)
+                .startDate(request.startDate())
+                .startTime(request.startTime())
+                .durationHours(request.durationHours())
+                .endedAt(endedAt)
+                .recurrenceType(request.recurrenceType())
+                .recurrenceWeekday(request.recurrenceWeekday())
+                .recurrenceWeekOfMonth(request.recurrenceWeekOfMonth())
+                .recurrenceEndDate(request.recurrenceEndDate())
+                .title(request.title())
+                .description(request.description())
+                .type(request.type())
+                .build();
+
+        try {
+            newBan.validateDurationPositive();
+        } catch (IllegalArgumentException e) {
+            throw new BadRequestException(ScheduleExceptionType.INVALID_DURATION);
+        }
+
+        try {
+            newBan.validateRecurrenceOptions();
+        } catch (IllegalStateException e) {
+            throw new BadRequestException(ScheduleExceptionType.INVALID_RECURRENCE_OPTION);
+        }
+
+        final Ban savedBan = banRepository.save(newBan);
 
         List<ProjectBan> projectBans = projects.stream()
                 .map(project -> ProjectBan.builder()
@@ -98,6 +175,10 @@ public class ScheduleServiceImpl implements ScheduleService {
                 .toList();
         projectBanRepository.saveAll(projectBans);
 
+        if (startedAt != null && endedAt != null) {
+            cancelOverlappingDeployments(startedAt, endedAt, request.relatedProjectIds());
+        }
+
         List<String> relatedProjectNames = projects.stream()
                 .map(Project::getName)
                 .toList();
@@ -106,23 +187,33 @@ public class ScheduleServiceImpl implements ScheduleService {
     }
 
     /**
-     * 날짜 및 시간 유효성 검증
+     * Ban과 겹치는 Deployment를 취소
      */
-    private void validateDateAndTime(
-            java.time.LocalDate startDate,
-            java.time.LocalTime startTime,
-            java.time.LocalDate endDate,
-            java.time.LocalTime endTime
+    private void cancelOverlappingDeployments(
+            LocalDateTime banStartDateTime,
+            LocalDateTime banEndDateTime,
+            List<Long> projectIds
     ) {
-        // 종료일이 시작일보다 이전인 경우
-        if (endDate.isBefore(startDate)) {
-            throw new BadRequestException(ScheduleExceptionType.INVALID_DATE_RANGE);
+        List<Deployment> overlappingDeployments = deploymentRepository.findOverlappingDeployments(
+                banStartDateTime,
+                banEndDateTime,
+                projectIds
+        );
+
+        if (overlappingDeployments.isEmpty()) {
+            return;
         }
 
-        // 같은 날인 경우 종료시간이 시작시간보다 이전인지 확인
-        if (endDate.equals(startDate) && endTime.isBefore(startTime)) {
-            throw new BadRequestException(ScheduleExceptionType.INVALID_TIME_RANGE);
+        log.info("Ban 생성으로 인한 Deployment 취소 - banStart: {}, banEnd: {}, 취소할 Deployment 수: {}",
+                banStartDateTime, banEndDateTime, overlappingDeployments.size());
+
+        for (Deployment deployment : overlappingDeployments) {
+            deployment.updateStatus(DeploymentStatus.CANCELED);
+            log.info("Deployment 취소 - deploymentId: {}, title: {}, scheduledAt: {}",
+                    deployment.getId(), deployment.getTitle(), deployment.getScheduledAt());
         }
+
+        deploymentRepository.saveAll(overlappingDeployments);
     }
 
     @Override
@@ -185,6 +276,32 @@ public class ScheduleServiceImpl implements ScheduleService {
                     return BanResponse.from(ban, relatedProjects);
                 })
                 .toList();
+    }
+
+    @Override
+    @Transactional
+    public void cancelBan(Long banId, Long accountId) {
+        log.info("작업 금지 기간 취소 요청 - banId: {}, accountId: {}", banId, accountId);
+
+        Account account = accountChecker.checkAccountExists(accountId);
+        validatePermission(account.getRole());
+
+        Ban ban = banRepository.findByIdAndIsDeletedFalse(banId)
+                .orElseThrow(() -> new NotFoundException(ScheduleExceptionType.BAN_NOT_FOUND));
+
+        ban.softDelete();
+        banRepository.save(ban);
+
+        log.info("작업 금지 기간 취소 완료 - banId: {}, accountId: {}", banId, accountId);
+    }
+
+    /**
+     * 권한 검증 (MANAGER, HEAD만 허용)
+     */
+    private void validatePermission(Role role) {
+        if (role == Role.DEVELOPER) {
+            throw new ForbiddenException(ScheduleExceptionType.INSUFFICIENT_PERMISSION);
+        }
     }
 }
 
