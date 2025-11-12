@@ -118,13 +118,13 @@ class ScheduleServiceGetDeploymentSchedulesTest {
         assertThat(response).isNotNull();
         assertThat(response).hasSize(2);
 
-        // 첫 번째 배포 작업 검증 (PLAN-PENDING → "PLAN_PENDING")
+        // 첫 번째 배포 작업 검증 (PLAN-PENDING)
         DeploymentScheduleResponse first = response.get(0);
         assertThat(first.id()).isEqualTo(1L);
         assertThat(first.title()).isEqualTo("배포 작업 1");
-        assertThat(first.status()).isEqualTo("PLAN_PENDING");
+        assertThat(first.status()).isEqualTo("PENDING");
         assertThat(first.stage()).isEqualTo("PLAN");
-        assertThat(first.deploymentStatus()).isEqualTo("PENDING");
+        assertThat(first.isDeployed()).isNull();
         assertThat(first.projectName()).isEqualTo("테스트 프로젝트");
         assertThat(first.registrant()).isEqualTo("테스트 계정");
         assertThat(first.registrantDepartment()).isEqualTo("IT");
@@ -132,13 +132,13 @@ class ScheduleServiceGetDeploymentSchedulesTest {
         assertThat(first.scheduledTime()).isEqualTo(
                 LocalDateTime.of(2025, 1, 15, 10, 0).toLocalTime());
 
-        // 두 번째 배포 작업 검증 (DEPLOYMENT-COMPLETED + isDeployed=true → "DEPLOYMENT_SUCCESS")
+        // 두 번째 배포 작업 검증 (DEPLOYMENT-COMPLETED + isDeployed=true)
         DeploymentScheduleResponse second = response.get(1);
         assertThat(second.id()).isEqualTo(2L);
         assertThat(second.title()).isEqualTo("배포 작업 2");
-        assertThat(second.status()).isEqualTo("DEPLOYMENT_SUCCESS");
+        assertThat(second.status()).isEqualTo("COMPLETED");
         assertThat(second.stage()).isEqualTo("DEPLOYMENT");
-        assertThat(second.deploymentStatus()).isEqualTo("COMPLETED");
+        assertThat(second.isDeployed()).isTrue();
         assertThat(second.projectName()).isEqualTo("테스트 프로젝트");
         assertThat(second.registrant()).isEqualTo("테스트 계정");
         assertThat(second.registrantDepartment()).isEqualTo("IT");
@@ -343,49 +343,63 @@ class ScheduleServiceGetDeploymentSchedulesTest {
                 .filter(r -> r.title().equals("PLAN_PENDING 테스트"))
                 .findFirst()
                 .orElseThrow();
-        assertThat(planPendingResponse.status()).isEqualTo("PLAN_PENDING");
+        assertThat(planPendingResponse.status()).isEqualTo("PENDING");
+        assertThat(planPendingResponse.stage()).isEqualTo("PLAN");
+        assertThat(planPendingResponse.isDeployed()).isNull();
 
         // DEPLOYMENT_PENDING 검증
         DeploymentScheduleResponse deploymentPendingResponse = response.stream()
                 .filter(r -> r.title().equals("DEPLOYMENT_PENDING 테스트"))
                 .findFirst()
                 .orElseThrow();
-        assertThat(deploymentPendingResponse.status()).isEqualTo("DEPLOYMENT_PENDING");
+        assertThat(deploymentPendingResponse.status()).isEqualTo("PENDING");
+        assertThat(deploymentPendingResponse.stage()).isEqualTo("DEPLOYMENT");
+        assertThat(deploymentPendingResponse.isDeployed()).isNull();
 
         // DEPLOYMENT_IN_PROGRESS 검증
         DeploymentScheduleResponse deploymentInProgressResponse = response.stream()
                 .filter(r -> r.title().equals("DEPLOYMENT_IN_PROGRESS 테스트"))
                 .findFirst()
                 .orElseThrow();
-        assertThat(deploymentInProgressResponse.status()).isEqualTo("DEPLOYMENT_IN_PROGRESS");
+        assertThat(deploymentInProgressResponse.status()).isEqualTo("IN_PROGRESS");
+        assertThat(deploymentInProgressResponse.stage()).isEqualTo("DEPLOYMENT");
+        assertThat(deploymentInProgressResponse.isDeployed()).isNull();
 
         // DEPLOYMENT_SUCCESS 검증 (DEPLOYMENT-COMPLETED + isDeployed=true)
         DeploymentScheduleResponse deploymentSuccessResponse = response.stream()
                 .filter(r -> r.title().equals("DEPLOYMENT_SUCCESS 테스트"))
                 .findFirst()
                 .orElseThrow();
-        assertThat(deploymentSuccessResponse.status()).isEqualTo("DEPLOYMENT_SUCCESS");
+        assertThat(deploymentSuccessResponse.status()).isEqualTo("COMPLETED");
+        assertThat(deploymentSuccessResponse.stage()).isEqualTo("DEPLOYMENT");
+        assertThat(deploymentSuccessResponse.isDeployed()).isTrue();
 
         // DEPLOYMENT_FAILURE 검증 (DEPLOYMENT-COMPLETED + isDeployed=false)
         DeploymentScheduleResponse deploymentFailureResponse = response.stream()
                 .filter(r -> r.title().equals("DEPLOYMENT_FAILURE 테스트"))
                 .findFirst()
                 .orElseThrow();
-        assertThat(deploymentFailureResponse.status()).isEqualTo("DEPLOYMENT_FAILURE");
+        assertThat(deploymentFailureResponse.status()).isEqualTo("COMPLETED");
+        assertThat(deploymentFailureResponse.stage()).isEqualTo("DEPLOYMENT");
+        assertThat(deploymentFailureResponse.isDeployed()).isFalse();
 
-        // DEPLOYMENT_SUCCESS 검증 (REPORT + isDeployed=true)
+        // REPORT_SUCCESS 검증 (REPORT + isDeployed=true)
         DeploymentScheduleResponse reportSuccessResponse = response.stream()
                 .filter(r -> r.title().equals("REPORT_SUCCESS 테스트"))
                 .findFirst()
                 .orElseThrow();
-        assertThat(reportSuccessResponse.status()).isEqualTo("DEPLOYMENT_SUCCESS");
+        assertThat(reportSuccessResponse.status()).isEqualTo("PENDING");
+        assertThat(reportSuccessResponse.stage()).isEqualTo("REPORT");
+        assertThat(reportSuccessResponse.isDeployed()).isTrue();
 
-        // DEPLOYMENT_FAILURE 검증 (REPORT + isDeployed=false)
+        // REPORT_FAILURE 검증 (REPORT + isDeployed=false)
         DeploymentScheduleResponse reportFailureResponse = response.stream()
                 .filter(r -> r.title().equals("REPORT_FAILURE 테스트"))
                 .findFirst()
                 .orElseThrow();
-        assertThat(reportFailureResponse.status()).isEqualTo("DEPLOYMENT_FAILURE");
+        assertThat(reportFailureResponse.status()).isEqualTo("APPROVED");
+        assertThat(reportFailureResponse.stage()).isEqualTo("REPORT");
+        assertThat(reportFailureResponse.isDeployed()).isFalse();
     }
 }
 

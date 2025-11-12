@@ -4,7 +4,6 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import lombok.Builder;
 import sys.be4man.domains.deployment.model.entity.Deployment;
-import sys.be4man.domains.deployment.model.type.DeploymentStatusForScheduleMapper;
 
 /**
  * 배포 작업 스케줄 응답 DTO
@@ -15,7 +14,7 @@ public record DeploymentScheduleResponse(
         String title,
         String status,
         String stage,
-        String deploymentStatus,
+        Boolean isDeployed,
         String projectName,
         LocalDate scheduledDate,
         LocalTime scheduledTime,
@@ -24,15 +23,12 @@ public record DeploymentScheduleResponse(
 ) {
 
     /**
-     * Deployment 엔티티로부터 DeploymentScheduleResponse 생성 DeploymentStage와 DeploymentStatus 조합으로 상태 매핑
+     * Deployment 엔티티로부터 DeploymentScheduleResponse 생성
+     * - status: DeploymentStatus enum 이름 (PENDING, REJECTED, IN_PROGRESS, CANCELED, COMPLETED, APPROVED)
+     * - stage: DeploymentStage enum 이름 (PLAN, DEPLOYMENT, REPORT, etc.)
+     * - isDeployed: Jenkins 배포 성공 여부 (null: 배포 전, true: 성공, false: 실패)
      */
     public static DeploymentScheduleResponse from(Deployment deployment) {
-        String status = DeploymentStatusForScheduleMapper.map(
-                deployment.getStage(),
-                deployment.getStatus(),
-                deployment.getIsDeployed()
-        );
-
         String registrant = deployment.getIssuer() != null ? deployment.getIssuer().getName() : null;
         String registrantDepartment = (deployment.getIssuer() != null
                 && deployment.getIssuer().getDepartment() != null)
@@ -42,9 +38,9 @@ public record DeploymentScheduleResponse(
         return DeploymentScheduleResponse.builder()
                 .id(deployment.getId())
                 .title(deployment.getTitle())
-                .status(status)
+                .status(deployment.getStatus().name())
                 .stage(deployment.getStage().name())
-                .deploymentStatus(deployment.getStatus().name())
+                .isDeployed(deployment.getIsDeployed())
                 .projectName(deployment.getProject().getName())
                 .scheduledDate(deployment.getScheduledAt().toLocalDate())
                 .scheduledTime(deployment.getScheduledAt().toLocalTime())
