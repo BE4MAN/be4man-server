@@ -113,12 +113,10 @@ class ScheduleServiceTest {
                         BanType.EXTERNAL_SCHEDULE.getKoreanName()
                 );
 
-        // RecurrenceType 확인 (NONE 포함)
-        assertThat(response.recurrenceTypes()).hasSize(4);
-        assertThat(response.recurrenceTypes().get(0).value()).isEqualTo("NONE");
-        assertThat(response.recurrenceTypes().get(0).label()).isEqualTo("없음");
+        // RecurrenceType 확인
+        assertThat(response.recurrenceTypes()).hasSize(3);
         assertThat(response.recurrenceTypes()).extracting("value")
-                .containsExactly("NONE", "DAILY", "WEEKLY", "MONTHLY");
+                .containsExactly("DAILY", "WEEKLY", "MONTHLY");
 
         // RecurrenceWeekday 확인
         assertThat(response.recurrenceWeekdays()).hasSize(7);
@@ -144,7 +142,7 @@ class ScheduleServiceTest {
         assertThat(response).isNotNull();
         assertThat(response.projects()).isEmpty();
         assertThat(response.restrictedPeriodTypes()).hasSize(4);
-        assertThat(response.recurrenceTypes()).hasSize(4);
+        assertThat(response.recurrenceTypes()).hasSize(3);
         assertThat(response.recurrenceWeekdays()).hasSize(7);
         assertThat(response.recurrenceWeeksOfMonth()).hasSize(5);
     }
