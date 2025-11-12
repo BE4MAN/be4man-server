@@ -1,5 +1,6 @@
 package sys.be4man.domains.deployment.repository;
 
+import static sys.be4man.domains.account.model.entity.QAccount.account;
 import static sys.be4man.domains.deployment.model.entity.QDeployment.deployment;
 import static sys.be4man.domains.project.model.entity.QProject.project;
 
@@ -32,6 +33,7 @@ public class DeploymentRepositoryImpl implements DeploymentRepositoryCustom {
         return queryFactory
                 .selectFrom(deployment)
                 .innerJoin(deployment.project, project).fetchJoin()
+                .innerJoin(deployment.issuer, account).fetchJoin()
                 .where(builder)
                 .orderBy(deployment.scheduledAt.asc())
                 .fetch();

@@ -123,7 +123,11 @@ class ScheduleServiceGetDeploymentSchedulesTest {
         assertThat(first.id()).isEqualTo(1L);
         assertThat(first.title()).isEqualTo("배포 작업 1");
         assertThat(first.status()).isEqualTo("PLAN_PENDING");
+        assertThat(first.stage()).isEqualTo("PLAN");
+        assertThat(first.deploymentStatus()).isEqualTo("PENDING");
         assertThat(first.projectName()).isEqualTo("테스트 프로젝트");
+        assertThat(first.registrant()).isEqualTo("테스트 계정");
+        assertThat(first.registrantDepartment()).isEqualTo("IT");
         assertThat(first.scheduledDate()).isEqualTo(LocalDate.of(2025, 1, 15));
         assertThat(first.scheduledTime()).isEqualTo(
                 LocalDateTime.of(2025, 1, 15, 10, 0).toLocalTime());
@@ -133,7 +137,11 @@ class ScheduleServiceGetDeploymentSchedulesTest {
         assertThat(second.id()).isEqualTo(2L);
         assertThat(second.title()).isEqualTo("배포 작업 2");
         assertThat(second.status()).isEqualTo("DEPLOYMENT_SUCCESS");
+        assertThat(second.stage()).isEqualTo("DEPLOYMENT");
+        assertThat(second.deploymentStatus()).isEqualTo("COMPLETED");
         assertThat(second.projectName()).isEqualTo("테스트 프로젝트");
+        assertThat(second.registrant()).isEqualTo("테스트 계정");
+        assertThat(second.registrantDepartment()).isEqualTo("IT");
         assertThat(second.scheduledDate()).isEqualTo(LocalDate.of(2025, 1, 16));
         assertThat(second.scheduledTime()).isEqualTo(
                 LocalDateTime.of(2025, 1, 16, 14, 30).toLocalTime());
