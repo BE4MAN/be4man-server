@@ -24,6 +24,7 @@ import sys.be4man.domains.deployment.model.type.DeploymentStage;
 import sys.be4man.domains.deployment.model.type.DeploymentStatus;
 import sys.be4man.domains.deployment.repository.DeploymentRepository;
 import sys.be4man.domains.project.model.entity.Project;
+import sys.be4man.domains.project.repository.RelatedProjectRepository;
 import sys.be4man.domains.pullrequest.model.entity.PullRequest;
 import sys.be4man.domains.schedule.dto.response.DeploymentScheduleResponse;
 
@@ -33,6 +34,9 @@ class ScheduleServiceGetDeploymentSchedulesTest {
 
     @Mock
     private DeploymentRepository deploymentRepository;
+
+    @Mock
+    private RelatedProjectRepository relatedProjectRepository;
 
     @InjectMocks
     private ScheduleServiceImpl scheduleService;
@@ -110,6 +114,10 @@ class ScheduleServiceGetDeploymentSchedulesTest {
                 endDate.atTime(23, 59, 59)
         )).thenReturn(deployments);
 
+        when(relatedProjectRepository.findByDeploymentIdIn(
+                Arrays.asList(1L, 2L)
+        )).thenReturn(List.of());
+
         // when
         List<DeploymentScheduleResponse> response = scheduleService.getDeploymentSchedules(
                 startDate, endDate);
@@ -126,6 +134,7 @@ class ScheduleServiceGetDeploymentSchedulesTest {
         assertThat(first.stage()).isEqualTo("PLAN");
         assertThat(first.isDeployed()).isNull();
         assertThat(first.projectName()).isEqualTo("테스트 프로젝트");
+        assertThat(first.relatedServices()).isEmpty();
         assertThat(first.registrant()).isEqualTo("테스트 계정");
         assertThat(first.registrantDepartment()).isEqualTo("IT");
         assertThat(first.scheduledDate()).isEqualTo(LocalDate.of(2025, 1, 15));
@@ -140,6 +149,7 @@ class ScheduleServiceGetDeploymentSchedulesTest {
         assertThat(second.stage()).isEqualTo("DEPLOYMENT");
         assertThat(second.isDeployed()).isTrue();
         assertThat(second.projectName()).isEqualTo("테스트 프로젝트");
+        assertThat(second.relatedServices()).isEmpty();
         assertThat(second.registrant()).isEqualTo("테스트 계정");
         assertThat(second.registrantDepartment()).isEqualTo("IT");
         assertThat(second.scheduledDate()).isEqualTo(LocalDate.of(2025, 1, 16));
@@ -206,6 +216,10 @@ class ScheduleServiceGetDeploymentSchedulesTest {
                 startDate.atStartOfDay(),
                 endDate.atTime(23, 59, 59)
         )).thenReturn(deployments);
+
+        when(relatedProjectRepository.findByDeploymentIdIn(
+                Arrays.asList(1L, 2L)
+        )).thenReturn(List.of());
 
         // when
         List<DeploymentScheduleResponse> response = scheduleService.getDeploymentSchedules(
@@ -329,6 +343,10 @@ class ScheduleServiceGetDeploymentSchedulesTest {
                 startDate.atStartOfDay(),
                 endDate.atTime(23, 59, 59)
         )).thenReturn(deployments);
+
+        when(relatedProjectRepository.findByDeploymentIdIn(
+                Arrays.asList(10L, 11L, 12L, 13L, 14L, 15L, 16L)
+        )).thenReturn(List.of());
 
         // when
         List<DeploymentScheduleResponse> response = scheduleService.getDeploymentSchedules(

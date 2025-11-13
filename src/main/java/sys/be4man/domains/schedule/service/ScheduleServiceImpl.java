@@ -207,8 +207,34 @@ public class ScheduleServiceImpl implements ScheduleService {
                 endDateTime
         );
 
+        if (deployments.isEmpty()) {
+            return List.of();
+        }
+
+        // N+1 쿼리 방지를 위한 배치 조회
+        List<Long> deploymentIds = deployments.stream()
+                .map(Deployment::getId)
+                .toList();
+
+        Map<Long, List<String>> deploymentProjectNamesMap = relatedProjectRepository
+                .findByDeploymentIdIn(deploymentIds)
+                .stream()
+                .collect(Collectors.groupingBy(
+                        rp -> rp.getDeployment().getId(),
+                        Collectors.mapping(
+                                rp -> rp.getProject().getName(),
+                                Collectors.collectingAndThen(
+                                        Collectors.toList(),
+                                        list -> list.stream().distinct().sorted().toList()
+                                )
+                        )
+                ));
+
         return deployments.stream()
-                .map(DeploymentScheduleResponse::from)
+                .map(deployment -> DeploymentScheduleResponse.from(
+                        deployment,
+                        deploymentProjectNamesMap.getOrDefault(deployment.getId(), List.of())
+                ))
                 .toList();
     }
 
