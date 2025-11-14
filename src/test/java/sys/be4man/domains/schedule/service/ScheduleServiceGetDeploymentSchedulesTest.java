@@ -22,7 +22,6 @@ import sys.be4man.domains.account.model.type.Role;
 import sys.be4man.domains.deployment.model.entity.Deployment;
 import sys.be4man.domains.deployment.model.type.DeploymentStage;
 import sys.be4man.domains.deployment.model.type.DeploymentStatus;
-import sys.be4man.domains.deployment.model.type.DeploymentType;
 import sys.be4man.domains.deployment.repository.DeploymentRepository;
 import sys.be4man.domains.project.model.entity.Project;
 import sys.be4man.domains.pullrequest.model.entity.PullRequest;
@@ -78,7 +77,6 @@ class ScheduleServiceGetDeploymentSchedulesTest {
                 .pullRequest(testPullRequest)
                 .title("배포 작업 1")
                 .content("배포 내용 1")
-                .type(DeploymentType.DEPLOY)
                 .stage(DeploymentStage.PLAN)
                 .status(DeploymentStatus.PENDING)
                 .scheduledAt(LocalDateTime.of(2025, 1, 15, 10, 0))
@@ -91,7 +89,6 @@ class ScheduleServiceGetDeploymentSchedulesTest {
                 .pullRequest(testPullRequest)
                 .title("배포 작업 2")
                 .content("배포 내용 2")
-                .type(DeploymentType.DEPLOY)
                 .stage(DeploymentStage.DEPLOYMENT)
                 .status(DeploymentStatus.COMPLETED)
                 .isDeployed(true)
@@ -126,9 +123,11 @@ class ScheduleServiceGetDeploymentSchedulesTest {
         assertThat(first.id()).isEqualTo(1L);
         assertThat(first.title()).isEqualTo("배포 작업 1");
         assertThat(first.status()).isEqualTo("PLAN_PENDING");
+        assertThat(first.stage()).isEqualTo("PLAN");
+        assertThat(first.deploymentStatus()).isEqualTo("PENDING");
         assertThat(first.projectName()).isEqualTo("테스트 프로젝트");
-        assertThat(first.prTitle()).isEqualTo("테스트 PR 제목");
-        assertThat(first.prBranch()).isEqualTo("feature-branch");
+        assertThat(first.registrant()).isEqualTo("테스트 계정");
+        assertThat(first.registrantDepartment()).isEqualTo("IT");
         assertThat(first.scheduledDate()).isEqualTo(LocalDate.of(2025, 1, 15));
         assertThat(first.scheduledTime()).isEqualTo(
                 LocalDateTime.of(2025, 1, 15, 10, 0).toLocalTime());
@@ -138,9 +137,11 @@ class ScheduleServiceGetDeploymentSchedulesTest {
         assertThat(second.id()).isEqualTo(2L);
         assertThat(second.title()).isEqualTo("배포 작업 2");
         assertThat(second.status()).isEqualTo("DEPLOYMENT_SUCCESS");
+        assertThat(second.stage()).isEqualTo("DEPLOYMENT");
+        assertThat(second.deploymentStatus()).isEqualTo("COMPLETED");
         assertThat(second.projectName()).isEqualTo("테스트 프로젝트");
-        assertThat(second.prTitle()).isEqualTo("테스트 PR 제목");
-        assertThat(second.prBranch()).isEqualTo("feature-branch");
+        assertThat(second.registrant()).isEqualTo("테스트 계정");
+        assertThat(second.registrantDepartment()).isEqualTo("IT");
         assertThat(second.scheduledDate()).isEqualTo(LocalDate.of(2025, 1, 16));
         assertThat(second.scheduledTime()).isEqualTo(
                 LocalDateTime.of(2025, 1, 16, 14, 30).toLocalTime());
@@ -180,7 +181,6 @@ class ScheduleServiceGetDeploymentSchedulesTest {
                 .pullRequest(testPullRequest)
                 .title("반려된 작업계획서")
                 .content("반려된 내용")
-                .type(DeploymentType.DEPLOY)
                 .stage(DeploymentStage.PLAN)
                 .status(DeploymentStatus.REJECTED)
                 .scheduledAt(LocalDateTime.of(2025, 1, 15, 11, 0))
@@ -193,7 +193,6 @@ class ScheduleServiceGetDeploymentSchedulesTest {
                 .pullRequest(testPullRequest)
                 .title("취소된 배포")
                 .content("취소된 내용")
-                .type(DeploymentType.DEPLOY)
                 .stage(DeploymentStage.DEPLOYMENT)
                 .status(DeploymentStatus.CANCELED)
                 .scheduledAt(LocalDateTime.of(2025, 1, 15, 12, 0))
@@ -234,7 +233,6 @@ class ScheduleServiceGetDeploymentSchedulesTest {
                 .pullRequest(testPullRequest)
                 .title("PLAN_PENDING 테스트")
                 .content("내용")
-                .type(DeploymentType.DEPLOY)
                 .stage(DeploymentStage.PLAN)
                 .status(DeploymentStatus.PENDING)
                 .scheduledAt(LocalDateTime.of(2025, 1, 15, 9, 0))
@@ -247,7 +245,6 @@ class ScheduleServiceGetDeploymentSchedulesTest {
                 .pullRequest(testPullRequest)
                 .title("DEPLOYMENT_PENDING 테스트")
                 .content("내용")
-                .type(DeploymentType.DEPLOY)
                 .stage(DeploymentStage.DEPLOYMENT)
                 .status(DeploymentStatus.PENDING)
                 .scheduledAt(LocalDateTime.of(2025, 1, 15, 10, 0))
@@ -260,7 +257,6 @@ class ScheduleServiceGetDeploymentSchedulesTest {
                 .pullRequest(testPullRequest)
                 .title("DEPLOYMENT_IN_PROGRESS 테스트")
                 .content("내용")
-                .type(DeploymentType.DEPLOY)
                 .stage(DeploymentStage.DEPLOYMENT)
                 .status(DeploymentStatus.IN_PROGRESS)
                 .scheduledAt(LocalDateTime.of(2025, 1, 15, 11, 0))
@@ -273,7 +269,6 @@ class ScheduleServiceGetDeploymentSchedulesTest {
                 .pullRequest(testPullRequest)
                 .title("DEPLOYMENT_SUCCESS 테스트")
                 .content("내용")
-                .type(DeploymentType.DEPLOY)
                 .stage(DeploymentStage.DEPLOYMENT)
                 .status(DeploymentStatus.COMPLETED)
                 .isDeployed(true)
@@ -287,7 +282,6 @@ class ScheduleServiceGetDeploymentSchedulesTest {
                 .pullRequest(testPullRequest)
                 .title("DEPLOYMENT_FAILURE 테스트")
                 .content("내용")
-                .type(DeploymentType.DEPLOY)
                 .stage(DeploymentStage.DEPLOYMENT)
                 .status(DeploymentStatus.COMPLETED)
                 .isDeployed(false)
@@ -301,7 +295,6 @@ class ScheduleServiceGetDeploymentSchedulesTest {
                 .pullRequest(testPullRequest)
                 .title("REPORT_SUCCESS 테스트")
                 .content("내용")
-                .type(DeploymentType.DEPLOY)
                 .stage(DeploymentStage.REPORT)
                 .status(DeploymentStatus.PENDING)
                 .isDeployed(true)
@@ -315,7 +308,6 @@ class ScheduleServiceGetDeploymentSchedulesTest {
                 .pullRequest(testPullRequest)
                 .title("REPORT_FAILURE 테스트")
                 .content("내용")
-                .type(DeploymentType.DEPLOY)
                 .stage(DeploymentStage.REPORT)
                 .status(DeploymentStatus.APPROVED)
                 .isDeployed(false)
