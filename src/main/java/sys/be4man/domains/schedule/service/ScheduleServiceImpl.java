@@ -131,7 +131,7 @@ public class ScheduleServiceImpl implements ScheduleService {
 
         LocalDateTime endedAt = request.endedAt();
         if (endedAt == null) {
-            endedAt = startedAt.plusMinutes(request.durationMinutes());
+            endedAt = startedAt.plusHours(request.durationMinutes());
         }
 
         if (endedAt.isBefore(startedAt)) {
@@ -216,25 +216,8 @@ public class ScheduleServiceImpl implements ScheduleService {
                 .map(Deployment::getId)
                 .toList();
 
-        Map<Long, List<String>> deploymentProjectNamesMap = relatedProjectRepository
-                .findByDeploymentIdIn(deploymentIds)
-                .stream()
-                .collect(Collectors.groupingBy(
-                        rp -> rp.getDeployment().getId(),
-                        Collectors.mapping(
-                                rp -> rp.getProject().getName(),
-                                Collectors.collectingAndThen(
-                                        Collectors.toList(),
-                                        list -> list.stream().distinct().sorted().toList()
-                                )
-                        )
-                ));
-
         return deployments.stream()
-                .map(deployment -> DeploymentScheduleResponse.from(
-                        deployment,
-                        deploymentProjectNamesMap.getOrDefault(deployment.getId(), List.of())
-                ))
+                .map(DeploymentScheduleResponse::from)
                 .toList();
     }
 
@@ -324,81 +307,81 @@ public class ScheduleServiceImpl implements ScheduleService {
         log.info("작업 금지 기간 취소 완료 - banId: {}, accountId: {}", banId, accountId);
     }
 
-    @Override
-    @Transactional(readOnly = true)
-    public BanConflictCheckResponse checkBanConflicts(
-            List<Long> projectIds,
-            LocalDate startDate,
-            LocalTime startTime,
-            Integer durationMinutes,
-            RecurrenceType recurrenceType,
-            RecurrenceWeekday recurrenceWeekday,
-            RecurrenceWeekOfMonth recurrenceWeekOfMonth,
-            LocalDate recurrenceEndDate,
-            LocalDate queryStartDate,
-            LocalDate queryEndDate
-    ) {
-        log.info(
-                "Ban 충돌 체크 - projectIds: {}, startDate: {}, startTime: {}, recurrenceType: {}, queryRange: {} ~ {}",
-                projectIds, startDate, startTime, recurrenceType, queryStartDate, queryEndDate);
-
-        List<Period> periods = RecurrenceCalculator.calculateRecurrenceDates(
-                recurrenceType,
-                startDate,
-                startTime,
-                durationMinutes,
-                null,
-                recurrenceWeekday,
-                recurrenceWeekOfMonth,
-                recurrenceEndDate,
-                queryStartDate,
-                queryEndDate
-        );
-
-        List<Deployment> conflictingDeployments = periods.stream()
-                .flatMap(period ->
-                                 deploymentRepository.findOverlappingDeployments(
-                                         period.startDateTime(),
-                                         period.endDateTime(),
-                                         projectIds
-                                 ).stream())
-                .distinct()
-                .toList();
-
-        if (conflictingDeployments.isEmpty()) {
-            return new BanConflictCheckResponse(List.of());
-        }
-
-        List<Long> deploymentIds = conflictingDeployments.stream()
-                .map(Deployment::getId)
-                .toList();
-
-        Map<Long, List<String>> deploymentProjectNamesMap = relatedProjectRepository
-                .findByDeploymentIdIn(deploymentIds)
-                .stream()
-                .collect(Collectors.groupingBy(
-                        rp -> rp.getDeployment().getId(),
-                        Collectors.mapping(
-                                rp -> rp.getProject().getName(),
-                                Collectors.collectingAndThen(
-                                        Collectors.toList(),
-                                        list -> list.stream().distinct().sorted().toList()
-                                )
-                        )
-                ));
-
-        List<ConflictingDeploymentResponse> uniqueConflicts = conflictingDeployments.stream()
-                .map(deployment -> new ConflictingDeploymentResponse(
-                        deployment.getId(),
-                        deployment.getTitle(),
-                        deploymentProjectNamesMap.getOrDefault(deployment.getId(), List.of()),
-                        deployment.getScheduledAt(),
-                        deployment.getScheduledToEndedAt()
-                ))
-                .toList();
-
-        return new BanConflictCheckResponse(uniqueConflicts);
-    }
+//    @Override
+//    @Transactional(readOnly = true)
+//    public BanConflictCheckResponse checkBanConflicts(
+//            List<Long> projectIds,
+//            LocalDate startDate,
+//            LocalTime startTime,
+//            Integer durationHours,
+//            RecurrenceType recurrenceType,
+//            RecurrenceWeekday recurrenceWeekday,
+//            RecurrenceWeekOfMonth recurrenceWeekOfMonth,
+//            LocalDate recurrenceEndDate,
+//            LocalDate queryStartDate,
+//            LocalDate queryEndDate
+//    ) {
+//        log.info(
+//                "Ban 충돌 체크 - projectIds: {}, startDate: {}, startTime: {}, recurrenceType: {}, queryRange: {} ~ {}",
+//                projectIds, startDate, startTime, recurrenceType, queryStartDate, queryEndDate);
+//
+//        List<Period> periods = RecurrenceCalculator.calculateRecurrenceDates(
+//                recurrenceType,
+//                startDate,
+//                startTime,
+//                durationHours,
+//                null,
+//                recurrenceWeekday,
+//                recurrenceWeekOfMonth,
+//                recurrenceEndDate,
+//                queryStartDate,
+//                queryEndDate
+//        );
+//
+//        List<Deployment> conflictingDeployments = periods.stream()
+//                .flatMap(period ->
+//                                 deploymentRepository.findOverlappingDeployments(
+//                                         period.startDateTime(),
+//                                         period.endDateTime(),
+//                                         projectIds
+//                                 ).stream())
+//                .distinct()
+//                .toList();
+//
+//        if (conflictingDeployments.isEmpty()) {
+//            return new BanConflictCheckResponse(List.of());
+//        }
+//
+//        List<Long> deploymentIds = conflictingDeployments.stream()
+//                .map(Deployment::getId)
+//                .toList();
+//
+//        Map<Long, List<String>> deploymentProjectNamesMap = relatedProjectRepository
+//                .findByDeploymentIdIn(deploymentIds)
+//                .stream()
+//                .collect(Collectors.groupingBy(
+//                        rp -> rp.getDeployment().getId(),
+//                        Collectors.mapping(
+//                                rp -> rp.getProject().getName(),
+//                                Collectors.collectingAndThen(
+//                                        Collectors.toList(),
+//                                        list -> list.stream().distinct().sorted().toList()
+//                                )
+//                        )
+//                ));
+//
+//        List<ConflictingDeploymentResponse> uniqueConflicts = conflictingDeployments.stream()
+//                .map(deployment -> new ConflictingDeploymentResponse(
+//                        deployment.getId(),
+//                        deployment.getTitle(),
+//                        deploymentProjectNamesMap.getOrDefault(deployment.getId(), List.of()),
+//                        deployment.getScheduledAt(),
+//                        deployment.getScheduledToEndedAt()
+//                ))
+//                .toList();
+//
+//        return new BanConflictCheckResponse(uniqueConflicts);
+//    }
 
     /**
      * 권한 검증 (MANAGER, HEAD만 허용)

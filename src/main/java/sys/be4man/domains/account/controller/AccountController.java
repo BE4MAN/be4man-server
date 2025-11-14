@@ -7,14 +7,17 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import sys.be4man.domains.account.dto.response.AccountInfoResponse;
+import sys.be4man.domains.account.dto.response.ApprovalLineAccountResponse;
 import sys.be4man.domains.account.service.AccountService;
 import sys.be4man.domains.auth.dto.AccountPrincipal;
 import sys.be4man.global.dto.response.ErrorResponse;
@@ -49,5 +52,27 @@ public class AccountController {
             @AuthenticationPrincipal AccountPrincipal principal
     ) {
         return ResponseEntity.ok(accountService.getMyAccount(principal.accountId()));
+    }
+
+    /**
+     * 결재라인에서 사용할 사원 목록 조회
+     */
+    @Operation(
+            summary = "결재라인 사원 목록 조회",
+            description = "결재라인에 추가할 수 있는 사원 목록을 조회합니다."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "조회 성공",
+                    content = @Content(schema = @Schema(implementation = ApprovalLineAccountResponse.class))),
+            @ApiResponse(responseCode = "401", description = "인증되지 않은 사용자",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    @SecurityRequirement(name = "Bearer Authentication")
+    @GetMapping("/approval-line/candidates")
+    public ResponseEntity<List<ApprovalLineAccountResponse>> getApprovalLineCandidates(
+            @RequestParam(name = "department", required = false) String department,
+            @RequestParam(name = "keyword", required = false) String keyword
+    ) {
+        return ResponseEntity.ok(accountService.searchApprovalLineAccounts(department, keyword));
     }
 }

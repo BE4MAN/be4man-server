@@ -12,8 +12,6 @@ import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import sys.be4man.domains.account.model.entity.Account;
-import sys.be4man.domains.deployment.model.entity.Deployment;
 
 /**
  * 배포 작업-프로젝트 연관관계 엔티티
@@ -33,13 +31,13 @@ public class RelatedProject {
     private Project project;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "deployment_id", nullable = false)
-    private Deployment deployment;
+    @JoinColumn(name = "related_id", nullable = false)
+    private Project relatedProject;
 
 
     @Builder
-    public RelatedProject(Project project, Deployment deployment) {
+    public RelatedProject(Project project, Project relatedProject) {
         this.project = project;
-        this.deployment = deployment;
+        this.relatedProject = relatedProject;
     }
 }
