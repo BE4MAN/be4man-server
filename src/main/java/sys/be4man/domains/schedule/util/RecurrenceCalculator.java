@@ -35,7 +35,7 @@ public class RecurrenceCalculator {
                 ban.getRecurrenceType(),
                 ban.getStartDate(),
                 ban.getStartTime(),
-                ban.getDurationHours(),
+                ban.getDurationMinutes(),
                 endedAt,
                 ban.getRecurrenceWeekday(),
                 ban.getRecurrenceWeekOfMonth(),
@@ -51,8 +51,8 @@ public class RecurrenceCalculator {
      * @param recurrenceType        반복 유형 (null이면 단일 일정)
      * @param startDate             시작일
      * @param startTime             시작 시간
-     * @param durationHours         지속 시간 (시간)
-     * @param endedAt               종료 일시 (null이면 startDate + startTime + durationHours로 계산)
+     * @param durationMinutes       지속 시간 (분)
+     * @param endedAt               종료 일시 (null이면 startDate + startTime + durationMinutes로 계산)
      * @param recurrenceWeekday     반복 요일 (WEEKLY, MONTHLY일 때 필수)
      * @param recurrenceWeekOfMonth 반복 주차 (MONTHLY일 때 필수)
      * @param recurrenceEndDate     반복 종료일 (null이면 무한 반복)
@@ -64,7 +64,7 @@ public class RecurrenceCalculator {
             RecurrenceType recurrenceType,
             LocalDate startDate,
             LocalTime startTime,
-            Integer durationHours,
+            Integer durationMinutes,
             LocalDateTime endedAt,
             RecurrenceWeekday recurrenceWeekday,
             RecurrenceWeekOfMonth recurrenceWeekOfMonth,
@@ -77,7 +77,7 @@ public class RecurrenceCalculator {
         if (recurrenceType == null) {
             // 단일 일정
             LocalDateTime banStart = LocalDateTime.of(startDate, startTime);
-            LocalDateTime banEnd = endedAt != null ? endedAt : banStart.plusHours(durationHours);
+            LocalDateTime banEnd = endedAt != null ? endedAt : banStart.plusMinutes(durationMinutes);
 
             if (startDate.isBefore(queryStartDate) || startDate.isAfter(queryEndDate)) {
                 return occurrences;
@@ -107,14 +107,14 @@ public class RecurrenceCalculator {
         switch (recurrenceType) {
             case DAILY:
                 occurrences.addAll(calculateDailyRecurrence(
-                        queryStart, effectiveEndDate, startTime, durationHours));
+                        queryStart, effectiveEndDate, startTime, durationMinutes));
                 break;
             case WEEKLY:
                 if (recurrenceWeekday == null) {
                     break;
                 }
                 occurrences.addAll(calculateWeeklyRecurrence(
-                        queryStart, effectiveEndDate, recurrenceWeekday, startTime, durationHours));
+                        queryStart, effectiveEndDate, recurrenceWeekday, startTime, durationMinutes));
                 break;
             case MONTHLY:
                 if (recurrenceWeekday == null || recurrenceWeekOfMonth == null) {
@@ -122,7 +122,7 @@ public class RecurrenceCalculator {
                 }
                 occurrences.addAll(calculateMonthlyRecurrence(
                         queryStart, effectiveEndDate, recurrenceWeekOfMonth,
-                        recurrenceWeekday, startTime, durationHours));
+                        recurrenceWeekday, startTime, durationMinutes));
                 break;
         }
 
@@ -136,14 +136,14 @@ public class RecurrenceCalculator {
             LocalDate startDate,
             LocalDate endDate,
             LocalTime startTime,
-            int durationHours
+            int durationMinutes
     ) {
         List<Period> occurrences = new ArrayList<>();
         LocalDate current = startDate;
 
         while (!current.isAfter(endDate)) {
             LocalDateTime occurrenceStart = LocalDateTime.of(current, startTime);
-            LocalDateTime occurrenceEnd = occurrenceStart.plusHours(durationHours);
+            LocalDateTime occurrenceEnd = occurrenceStart.plusMinutes(durationMinutes);
             occurrences.add(new Period(occurrenceStart, occurrenceEnd));
             current = current.plusDays(1);
         }
@@ -159,7 +159,7 @@ public class RecurrenceCalculator {
             LocalDate endDate,
             RecurrenceWeekday weekday,
             LocalTime startTime,
-            int durationHours
+            int durationMinutes
     ) {
         List<Period> occurrences = new ArrayList<>();
         DayOfWeek targetDayOfWeek = mapToDayOfWeek(weekday);
@@ -173,7 +173,7 @@ public class RecurrenceCalculator {
         LocalDate occurrenceDate = firstOccurrence;
         while (!occurrenceDate.isAfter(endDate)) {
             LocalDateTime occurrenceStart = LocalDateTime.of(occurrenceDate, startTime);
-            LocalDateTime occurrenceEnd = occurrenceStart.plusHours(durationHours);
+            LocalDateTime occurrenceEnd = occurrenceStart.plusMinutes(durationMinutes);
             occurrences.add(new Period(occurrenceStart, occurrenceEnd));
             occurrenceDate = occurrenceDate.plusWeeks(1);
         }
@@ -190,7 +190,7 @@ public class RecurrenceCalculator {
             RecurrenceWeekOfMonth weekOfMonth,
             RecurrenceWeekday weekday,
             LocalTime startTime,
-            int durationHours
+            int durationMinutes
     ) {
         List<Period> occurrences = new ArrayList<>();
         DayOfWeek targetDayOfWeek = mapToDayOfWeek(weekday);
@@ -202,7 +202,7 @@ public class RecurrenceCalculator {
             if (occurrenceDate != null && !occurrenceDate.isBefore(startDate)
                     && !occurrenceDate.isAfter(endDate)) {
                 LocalDateTime occurrenceStart = LocalDateTime.of(occurrenceDate, startTime);
-                LocalDateTime occurrenceEnd = occurrenceStart.plusHours(durationHours);
+                LocalDateTime occurrenceEnd = occurrenceStart.plusMinutes(durationMinutes);
                 occurrences.add(new Period(occurrenceStart, occurrenceEnd));
             }
 

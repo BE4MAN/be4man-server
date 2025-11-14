@@ -133,7 +133,7 @@ class ScheduleServiceCreateBanTest {
                 "테스트 설명",
                 LocalDate.of(2025, 1, 1),
                 LocalTime.of(10, 0),
-        8,
+        480,
         null,
                 BanType.MAINTENANCE,
         Arrays.asList(1L, 2L),
@@ -167,7 +167,7 @@ class ScheduleServiceCreateBanTest {
         assertThat(response.services()).containsExactlyInAnyOrder("프로젝트 1", "프로젝트 2");
         assertThat(response.startDate()).isEqualTo("2025-01-01");
         assertThat(response.startTime()).isEqualTo("10:00");
-        assertThat(response.durationHours()).isEqualTo(8);
+        assertThat(response.durationMinutes()).isEqualTo(480);
         assertThat(response.endedAt()).isEqualTo("2025-01-01T18:00");
         assertThat(response.registrant()).isEqualTo("매니저 계정");
         assertThat(response.registrantDepartment()).isEqualTo(JobDepartment.IT.name());
@@ -185,7 +185,7 @@ class ScheduleServiceCreateBanTest {
                 "설명",
                 LocalDate.of(2025, 1, 1),
                 LocalTime.of(10, 0),
-                4,
+                240,
                 LocalDateTime.of(2024, 12, 31, 23, 0),
                 BanType.MAINTENANCE,
                 List.of(1L),
@@ -215,7 +215,7 @@ class ScheduleServiceCreateBanTest {
                 "설명",
                 LocalDate.of(2025, 1, 1),
                 LocalTime.of(18, 0),
-                -2,
+                -120,
                 null,
                 BanType.MAINTENANCE,
                 List.of(1L),
@@ -245,7 +245,7 @@ class ScheduleServiceCreateBanTest {
                 "설명",
                 LocalDate.of(2025, 1, 1),
                 LocalTime.of(10, 0),
-                4,
+                240,
                 null,
                 BanType.MAINTENANCE,
                 Arrays.asList(1L, 999L),
@@ -275,7 +275,7 @@ class ScheduleServiceCreateBanTest {
                 "설명",
                 LocalDate.of(2025, 1, 15),
                 LocalTime.of(16, 0),
-                4,
+                240,
                 null,
                 BanType.MAINTENANCE,
                 Arrays.asList(1L),
@@ -342,7 +342,7 @@ class ScheduleServiceCreateBanTest {
                 "테스트 설명",
                 LocalDate.of(2025, 1, 1),
                 LocalTime.of(10, 0),
-                8,
+                480,
                 null,
                 BanType.MAINTENANCE,
                 Arrays.asList(1L),
@@ -383,7 +383,7 @@ class ScheduleServiceCreateBanTest {
                 "테스트 설명",
                 LocalDate.of(2025, 1, 1),
                 LocalTime.of(10, 0),
-                8,
+                480,
                 null,
                 BanType.MAINTENANCE,
                 Arrays.asList(1L),
@@ -424,7 +424,7 @@ class ScheduleServiceCreateBanTest {
                 "테스트 설명",
                 LocalDate.of(2025, 1, 1),
                 LocalTime.of(10, 0),
-                8,
+                480,
                 null,
                 BanType.MAINTENANCE,
                 Arrays.asList(1L),

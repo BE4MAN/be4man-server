@@ -91,7 +91,7 @@ class ScheduleServiceGetBanSchedulesTest {
                 .type(BanType.MAINTENANCE)
                 .startDate(LocalDate.of(2025, 1, 15))
                 .startTime(LocalTime.of(9, 0))
-                .durationHours(9)
+                .durationMinutes(540)
                 .endedAt(LocalDateTime.of(2025, 1, 15, 18, 0))
                 .build();
         ReflectionTestUtils.setField(ban1, "id", 1L);
@@ -103,7 +103,7 @@ class ScheduleServiceGetBanSchedulesTest {
                 .type(BanType.DB_MIGRATION)
                 .startDate(LocalDate.of(2025, 1, 16))
                 .startTime(LocalTime.of(10, 0))
-                .durationHours(2)
+                .durationMinutes(120)
                 .endedAt(LocalDateTime.of(2025, 1, 16, 12, 0))
                 .build();
         ReflectionTestUtils.setField(ban2, "id", 2L);
@@ -155,7 +155,7 @@ class ScheduleServiceGetBanSchedulesTest {
         assertThat(first.startDate()).isEqualTo("2025-01-15");
         assertThat(first.startTime()).isEqualTo("09:00");
         assertThat(first.endedAt()).isEqualTo("2025-01-15T18:00");
-        assertThat(first.durationHours()).isEqualTo(9);
+        assertThat(first.durationMinutes()).isEqualTo(540);
         assertThat(first.services()).containsExactly("프로젝트 1", "프로젝트 2");
         assertThat(first.registrant()).isEqualTo("테스트 계정");
         assertThat(first.registrantDepartment()).isEqualTo(JobDepartment.IT.name());
@@ -170,7 +170,7 @@ class ScheduleServiceGetBanSchedulesTest {
         assertThat(second.startDate()).isEqualTo("2025-01-16");
         assertThat(second.startTime()).isEqualTo("10:00");
         assertThat(second.endedAt()).isEqualTo("2025-01-16T12:00");
-        assertThat(second.durationHours()).isEqualTo(2);
+        assertThat(second.durationMinutes()).isEqualTo(120);
         assertThat(second.services()).isEmpty();
         assertThat(second.registrant()).isEqualTo("테스트 계정");
         assertThat(second.registrantDepartment()).isEqualTo(JobDepartment.IT.name());
