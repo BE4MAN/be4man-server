@@ -90,7 +90,7 @@ class ScheduleServiceCancelBanTest {
                 .type(BanType.MAINTENANCE)
                 .startDate(LocalDate.of(2025, 1, 15))
                 .startTime(LocalTime.of(10, 0))
-                .durationHours(4)
+                .durationMinutes(240)
                 .endedAt(LocalDateTime.of(2025, 1, 15, 14, 0))
                 .build();
         ReflectionTestUtils.setField(testBan, "id", 1L);
