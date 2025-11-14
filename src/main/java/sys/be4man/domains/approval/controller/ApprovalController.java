@@ -42,9 +42,7 @@ public class ApprovalController {
             description = "결재 문서의 상세 정보를 조회합니다. 문서의 기안자, 결재선, 본문 내용 등이 포함됩니다."
     )
     @GetMapping("/{id}")
-    public ResponseEntity<ApprovalDetailResponse> getApprovalDetail(
-            @PathVariable Long id
-    ) {
+    public ResponseEntity<ApprovalDetailResponse> getApprovalDetail(@PathVariable Long id) {
         return ResponseEntity.ok(approvalService.getApprovalDetail(id));
     }
 
@@ -80,11 +78,18 @@ public class ApprovalController {
 
     @Operation(
             summary = "결재 문서 상신 취소",
-            description = "기안자가 결재 요청을 취소할 때 사용합니다. 상태는 ‘취소됨’으로 변경됩니다."
+            description = """
+            기안자가 결재 요청을 취소할 때 사용합니다.
+            <br>- 요청 본문(`ApprovalDecisionRequest`)에 취소 사유를 포함할 수 있습니다.
+            """
     )
     @PatchMapping("/{id}/cancel")
-    public ResponseEntity<Void> cancel(@PathVariable Long id) {
-        approvalService.cancel(id);
+    public ResponseEntity<Void> cancel(
+            @PathVariable Long id,
+            @RequestBody(required = false) ApprovalDecisionRequest request
+    ) {
+        if (request == null) request = new ApprovalDecisionRequest();
+        approvalService.cancel(id, request);
         return ResponseEntity.noContent().build();
     }
 

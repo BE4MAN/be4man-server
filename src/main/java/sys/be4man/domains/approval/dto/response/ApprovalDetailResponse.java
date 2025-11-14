@@ -14,7 +14,12 @@ public class ApprovalDetailResponse {
 
     private Long id;
     private Long deploymentId;
+
     private Long drafterAccountId;
+    private String drafterName;
+    private String drafterDept;
+    private String drafterRank;
+
     private String title;
     private String content;
     private String service;
@@ -31,7 +36,12 @@ public class ApprovalDetailResponse {
     public static class ApprovalLineDto {
         private Long id;
         private Long accountId;
+        private String accountName;
+        private String deptName;
+        private String rank;
         private ApprovalLineType type;
         private String comment;
+        private LocalDateTime approvedAt;
+        private String statusLabel;
     }
 }

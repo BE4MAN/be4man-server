@@ -4,19 +4,20 @@ import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
-import sys.be4man.domains.deployment.model.entity.Deployment;
+import sys.be4man.domains.project.model.entity.Project;
 import sys.be4man.domains.project.model.entity.RelatedProject;
 
 public interface RelatedProjectRepository extends JpaRepository<RelatedProject, Long> {
 
-    List<RelatedProject> findByDeployment(Deployment deployment);
+    List<RelatedProject> findByProject(Project project);
 
-    /**
-     * Deployment ID 목록으로 RelatedProject 배치 조회
-     */
     @Query("SELECT rp FROM RelatedProject rp " +
-           "JOIN FETCH rp.project p " +
-           "JOIN FETCH rp.deployment d " +
-           "WHERE d.id IN :deploymentIds")
-    List<RelatedProject> findByDeploymentIdIn(@Param("deploymentIds") List<Long> deploymentIds);
+            "JOIN FETCH rp.project p " +
+            "JOIN FETCH rp.relatedProject r " +
+            "WHERE p.id IN :projectIds")
+    List<RelatedProject> findByProjectIdIn(@Param("projectIds") List<Long> projectIds);
+
+    void deleteByProject(Project project);
+
+    boolean existsByProjectAndRelatedProject(Project project, Project relatedProject);
 }
