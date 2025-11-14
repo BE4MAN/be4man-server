@@ -114,8 +114,9 @@ class ScheduleServiceGetDeploymentSchedulesTest {
                 endDate.atTime(23, 59, 59)
         )).thenReturn(deployments);
 
-        when(relatedProjectRepository.findByDeploymentIdIn(
-                Arrays.asList(1L, 2L)
+        // Deployment의 project_id 목록: [1L] (두 Deployment 모두 같은 프로젝트)
+        when(relatedProjectRepository.findByProjectIdIn(
+                Arrays.asList(1L)
         )).thenReturn(List.of());
 
         // when
@@ -217,8 +218,9 @@ class ScheduleServiceGetDeploymentSchedulesTest {
                 endDate.atTime(23, 59, 59)
         )).thenReturn(deployments);
 
-        when(relatedProjectRepository.findByDeploymentIdIn(
-                Arrays.asList(1L, 2L)
+        // Deployment의 project_id 목록: [1L] (두 Deployment 모두 같은 프로젝트)
+        when(relatedProjectRepository.findByProjectIdIn(
+                Arrays.asList(1L)
         )).thenReturn(List.of());
 
         // when
@@ -344,8 +346,9 @@ class ScheduleServiceGetDeploymentSchedulesTest {
                 endDate.atTime(23, 59, 59)
         )).thenReturn(deployments);
 
-        when(relatedProjectRepository.findByDeploymentIdIn(
-                Arrays.asList(10L, 11L, 12L, 13L, 14L, 15L, 16L)
+        // Deployment의 project_id 목록: [1L] (모든 Deployment가 같은 프로젝트)
+        when(relatedProjectRepository.findByProjectIdIn(
+                Arrays.asList(1L)
         )).thenReturn(List.of());
 
         // when

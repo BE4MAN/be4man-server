@@ -221,19 +221,7 @@ public class ScheduleServiceImpl implements ScheduleService {
                 .toList();
 
         // 단방향 관계: project_id IN deploymentProjectIds인 경우의 relatedProject만 조회
-        List<RelatedProject> allRelatedProjects = relatedProjectRepository.findByProjectIdIn(deploymentProjectIds);
-        
-        // 각 프로젝트 ID별로 관련 프로젝트 이름 목록을 매핑
-        Map<Long, List<String>> projectRelatedServicesMap = new java.util.HashMap<>();
-        
-        for (RelatedProject rp : allRelatedProjects) {
-            Long projectId = rp.getProject().getId();
-            String relatedProjectName = rp.getRelatedProject().getName();
-            projectRelatedServicesMap.computeIfAbsent(projectId, k -> new ArrayList<>()).add(relatedProjectName);
-        }
-
-        // 각 프로젝트 ID별로 관련 서비스 목록 정렬 및 중복 제거
-        projectRelatedServicesMap.replaceAll((k, v) -> v.stream().distinct().sorted().toList());
+        Map<Long, List<String>> projectRelatedServicesMap = buildProjectRelatedServicesMap(deploymentProjectIds);
 
         // 각 Deployment별로 관련 프로젝트 이름 목록 생성
         return deployments.stream()
@@ -314,6 +302,33 @@ public class ScheduleServiceImpl implements ScheduleService {
                 ));
     }
 
+    /**
+     * 프로젝트 ID 목록에 대한 관련 프로젝트 이름 Map 생성 (단방향 관계)
+     * - project_id IN projectIds인 경우의 relatedProject만 조회
+     * 
+     * @param projectIds 프로젝트 ID 목록
+     * @return 프로젝트 ID별 관련 프로젝트 이름 목록 (중복 제거 및 정렬됨)
+     */
+    private Map<Long, List<String>> buildProjectRelatedServicesMap(List<Long> projectIds) {
+        if (projectIds.isEmpty()) {
+            return new java.util.HashMap<>();
+        }
+
+        List<RelatedProject> relatedProjects = relatedProjectRepository.findByProjectIdIn(projectIds);
+        
+        Map<Long, List<String>> projectRelatedServicesMap = new java.util.HashMap<>();
+        for (RelatedProject rp : relatedProjects) {
+            Long projectId = rp.getProject().getId();
+            String relatedProjectName = rp.getRelatedProject().getName();
+            projectRelatedServicesMap.computeIfAbsent(projectId, k -> new ArrayList<>()).add(relatedProjectName);
+        }
+
+        // 각 프로젝트 ID별로 관련 서비스 목록 정렬 및 중복 제거
+        projectRelatedServicesMap.replaceAll((k, v) -> v.stream().distinct().sorted().toList());
+
+        return projectRelatedServicesMap;
+    }
+
     @Override
     @Transactional
     public void cancelBan(Long banId, Long accountId) {
@@ -389,18 +404,8 @@ public class ScheduleServiceImpl implements ScheduleService {
                 .distinct()
                 .toList();
 
-        List<RelatedProject> deploymentRelatedProjects = relatedProjectRepository.findByProjectIdIn(deploymentProjectIds);
-
         // 각 프로젝트 ID별로 관련 프로젝트 이름 목록을 매핑
-        Map<Long, List<String>> projectRelatedServicesMap = new java.util.HashMap<>();
-        for (RelatedProject rp : deploymentRelatedProjects) {
-            Long projectId = rp.getProject().getId();
-            String relatedProjectName = rp.getRelatedProject().getName();
-            projectRelatedServicesMap.computeIfAbsent(projectId, k -> new ArrayList<>()).add(relatedProjectName);
-        }
-        
-        // 각 프로젝트 ID별로 관련 서비스 목록 정렬 및 중복 제거
-        projectRelatedServicesMap.replaceAll((k, v) -> v.stream().distinct().sorted().toList());
+        Map<Long, List<String>> projectRelatedServicesMap = buildProjectRelatedServicesMap(deploymentProjectIds);
 
         // 각 Deployment별로 관련 프로젝트 이름 목록 생성
         Map<Long, List<String>> deploymentRelatedServicesMap = new java.util.HashMap<>();
