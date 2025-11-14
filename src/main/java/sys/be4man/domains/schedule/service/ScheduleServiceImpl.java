@@ -84,7 +84,7 @@ public class ScheduleServiceImpl implements ScheduleService {
                 .account(account)
                 .startDate(request.startDate())
                 .startTime(request.startTime())
-                .durationHours(request.durationHours())
+                .durationMinutes(request.durationMinutes())
                 .endedAt(getEndedAt(request))
                 .recurrenceType(request.recurrenceType())
                 .recurrenceWeekday(request.recurrenceWeekday())
@@ -131,7 +131,7 @@ public class ScheduleServiceImpl implements ScheduleService {
 
         LocalDateTime endedAt = request.endedAt();
         if (endedAt == null) {
-            endedAt = startedAt.plusHours(request.durationHours());
+            endedAt = startedAt.plusMinutes(request.durationMinutes());
         }
 
         if (endedAt.isBefore(startedAt)) {
@@ -330,7 +330,7 @@ public class ScheduleServiceImpl implements ScheduleService {
             List<Long> projectIds,
             LocalDate startDate,
             LocalTime startTime,
-            Integer durationHours,
+            Integer durationMinutes,
             RecurrenceType recurrenceType,
             RecurrenceWeekday recurrenceWeekday,
             RecurrenceWeekOfMonth recurrenceWeekOfMonth,
@@ -346,7 +346,7 @@ public class ScheduleServiceImpl implements ScheduleService {
                 recurrenceType,
                 startDate,
                 startTime,
-                durationHours,
+                durationMinutes,
                 null,
                 recurrenceWeekday,
                 recurrenceWeekOfMonth,

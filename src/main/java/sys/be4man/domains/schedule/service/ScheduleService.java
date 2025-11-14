@@ -56,7 +56,7 @@ public interface ScheduleService {
             List<Long> projectIds,
             LocalDate startDate,
             LocalTime startTime,
-            Integer durationHours,
+            Integer durationMinutes,
             sys.be4man.domains.ban.model.type.RecurrenceType recurrenceType,
             sys.be4man.domains.ban.model.type.RecurrenceWeekday recurrenceWeekday,
             sys.be4man.domains.ban.model.type.RecurrenceWeekOfMonth recurrenceWeekOfMonth,

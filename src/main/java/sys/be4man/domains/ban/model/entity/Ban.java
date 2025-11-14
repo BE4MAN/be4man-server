@@ -60,8 +60,8 @@ public class Ban extends BaseEntity {
     @Column(name = "start_time", nullable = false)
     private LocalTime startTime;
 
-    @Column(name = "duration_hours", nullable = false)
-    private Integer durationHours;
+    @Column(name = "duration_minutes", nullable = false)
+    private Integer durationMinutes;
 
     @Column(name = "ended_at")
     private LocalDateTime endedAt;
@@ -86,7 +86,7 @@ public class Ban extends BaseEntity {
             Account account,
             LocalDate startDate,
             LocalTime startTime,
-            Integer durationHours,
+            Integer durationMinutes,
             LocalDateTime endedAt,
             RecurrenceType recurrenceType,
             RecurrenceWeekday recurrenceWeekday,
@@ -99,8 +99,8 @@ public class Ban extends BaseEntity {
         this.account = account;
         this.startDate = Objects.requireNonNull(startDate, "startDate must not be null");
         this.startTime = Objects.requireNonNull(startTime, "startTime must not be null");
-        this.durationHours = Objects.requireNonNull(durationHours,
-                                                    "durationHours must not be null");
+        this.durationMinutes = Objects.requireNonNull(durationMinutes,
+                                                    "durationMinutes must not be null");
         this.endedAt = endedAt;
         this.recurrenceType = recurrenceType;
         this.recurrenceWeekday = recurrenceWeekday;
@@ -114,12 +114,12 @@ public class Ban extends BaseEntity {
     /**
      * 금지 기간 업데이트
      */
-    public void updatePeriod(LocalDate startDate, LocalTime startTime, Integer durationHours,
+    public void updatePeriod(LocalDate startDate, LocalTime startTime, Integer durationMinutes,
             LocalDateTime endedAt) {
         this.startDate = startDate;
         this.startTime = Objects.requireNonNull(startTime, "startTime must not be null");
-        this.durationHours = Objects.requireNonNull(durationHours,
-                                                    "durationHours must not be null");
+        this.durationMinutes = Objects.requireNonNull(durationMinutes,
+                                                    "durationMinutes must not be null");
         this.endedAt = endedAt;
     }
 
@@ -159,15 +159,15 @@ public class Ban extends BaseEntity {
         if (endedAt != null) {
             return endedAt;
         }
-        return getStartDateTime().plusHours(durationHours);
+        return getStartDateTime().plusMinutes(durationMinutes);
     }
 
     /**
      * 기간 검증
      */
     public void validateDurationPositive() {
-        if (durationHours == null || durationHours <= 0) {
-            throw new IllegalArgumentException("durationHours must be positive");
+        if (durationMinutes == null || durationMinutes <= 0) {
+            throw new IllegalArgumentException("durationMinutes must be positive");
         }
     }
 
@@ -178,13 +178,13 @@ public class Ban extends BaseEntity {
         Objects.requireNonNull(startDateTime, "startDateTime must not be null");
         Objects.requireNonNull(endDateTime, "endDateTime must not be null");
 
-        long hours = Duration.between(startDateTime, endDateTime).toHours();
-        if (hours <= 0) {
+        long minutes = Duration.between(startDateTime, endDateTime).toMinutes();
+        if (minutes <= 0) {
             throw new IllegalArgumentException("Duration between start and end must be positive");
         }
         this.startDate = startDateTime.toLocalDate();
         this.startTime = startDateTime.toLocalTime();
-        this.durationHours = (int) hours;
+        this.durationMinutes = (int) minutes;
         this.endedAt = endDateTime;
     }
 

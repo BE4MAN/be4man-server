@@ -32,7 +32,7 @@ public record CreateBanRequest(
 
         @NotNull(message = "금지 시간(duration)은 필수입니다")
         @Positive(message = "금지 시간(duration)은 0보다 커야 합니다")
-        Integer durationHours,
+        Integer durationMinutes,
 
         LocalDateTime endedAt,
 

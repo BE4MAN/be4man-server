@@ -183,7 +183,7 @@ public class ScheduleController {
             @RequestParam @NotEmpty List<Long> projectIds,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.TIME) LocalTime startTime,
-            @RequestParam @Positive Integer durationHours,
+            @RequestParam @Positive Integer durationMinutes,
             @RequestParam(required = false) RecurrenceType recurrenceType,
             @RequestParam(required = false) RecurrenceWeekday recurrenceWeekday,
             @RequestParam(required = false) RecurrenceWeekOfMonth recurrenceWeekOfMonth,
@@ -194,7 +194,7 @@ public class ScheduleController {
         log.info("Ban 충돌 체크 요청 - projectIds: {}, startDate: {}, startTime: {}, queryRange: {} ~ {}",
                 projectIds, startDate, startTime, queryStartDate, queryEndDate);
         return ResponseEntity.ok(scheduleService.checkBanConflicts(
-                projectIds, startDate, startTime, durationHours,
+                projectIds, startDate, startTime, durationMinutes,
                 recurrenceType, recurrenceWeekday, recurrenceWeekOfMonth, recurrenceEndDate,
                 queryStartDate, queryEndDate
         ));
