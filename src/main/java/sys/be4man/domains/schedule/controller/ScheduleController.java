@@ -8,11 +8,14 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.List;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -25,7 +28,11 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import sys.be4man.domains.auth.dto.AccountPrincipal;
 import sys.be4man.domains.ban.model.type.BanType;
+import sys.be4man.domains.ban.model.type.RecurrenceType;
+import sys.be4man.domains.ban.model.type.RecurrenceWeekOfMonth;
+import sys.be4man.domains.ban.model.type.RecurrenceWeekday;
 import sys.be4man.domains.schedule.dto.request.CreateBanRequest;
+import sys.be4man.domains.schedule.dto.response.BanConflictCheckResponse;
 import sys.be4man.domains.schedule.dto.response.BanResponse;
 import sys.be4man.domains.schedule.dto.response.DeploymentScheduleResponse;
 import sys.be4man.domains.schedule.dto.response.ScheduleMetadataResponse;
@@ -157,5 +164,40 @@ public class ScheduleController {
         scheduleService.cancelBan(banId, principal.accountId());
         return ResponseEntity.noContent().build();
     }
+
+    /**
+     * Ban 등록 전 충돌 Deployment 조회
+     */
+//    @Operation(summary = "Ban 등록 전 충돌 Deployment 조회", description = "입력 폼이 모두 채워진 상태에서 충돌하는 Deployment 목록을 조회합니다.")
+//    @ApiResponses({
+//            @ApiResponse(responseCode = "200", description = "조회 성공",
+//                    content = @Content(schema = @Schema(implementation = BanConflictCheckResponse.class))),
+//            @ApiResponse(responseCode = "400", description = "잘못된 요청",
+//                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+//            @ApiResponse(responseCode = "401", description = "인증되지 않은 사용자",
+//                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+//    })
+//    @SecurityRequirement(name = "Bearer Authentication")
+//    @GetMapping("/bans/conflicts")
+//    public ResponseEntity<BanConflictCheckResponse> checkBanConflicts(
+//            @RequestParam @NotEmpty List<Long> projectIds,
+//            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+//            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.TIME) LocalTime startTime,
+//            @RequestParam @Positive Integer durationHours,
+//            @RequestParam(required = false) RecurrenceType recurrenceType,
+//            @RequestParam(required = false) RecurrenceWeekday recurrenceWeekday,
+//            @RequestParam(required = false) RecurrenceWeekOfMonth recurrenceWeekOfMonth,
+//            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate recurrenceEndDate,
+//            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate queryStartDate,
+//            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate queryEndDate
+//    ) {
+//        log.info("Ban 충돌 체크 요청 - projectIds: {}, startDate: {}, startTime: {}, queryRange: {} ~ {}",
+//                projectIds, startDate, startTime, queryStartDate, queryEndDate);
+//        return ResponseEntity.ok(scheduleService.checkBanConflicts(
+//                projectIds, startDate, startTime, durationHours,
+//                recurrenceType, recurrenceWeekday, recurrenceWeekOfMonth, recurrenceEndDate,
+//                queryStartDate, queryEndDate
+//        ));
+//    }
 }
 

@@ -6,12 +6,10 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import sys.be4man.domains.account.model.entity.Account;
 import sys.be4man.domains.account.repository.AccountRepository;
 import sys.be4man.domains.deployment.dto.request.DeploymentCreateRequest;
@@ -36,7 +34,8 @@ public class DeploymentServiceImpl implements DeploymentService {
     private final AccountRepository accountRepository;
     private final PullRequestRepository pullRequestRepository;
     private final DeploymentScheduler deploymentScheduler;
-    private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+    private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern(
+            "yyyy-MM-dd HH:mm");
 
     @Override
     public DeploymentResponse createDeployment(DeploymentCreateRequest request) {
@@ -59,7 +58,8 @@ public class DeploymentServiceImpl implements DeploymentService {
                 .status(DeploymentStatus.valueOf(
                         request.getStatus() != null ? request.getStatus() : "PENDING"))
                 .isDeployed(false)
-                .expectedDuration(request.getExpectedDuration() != null ? request.getExpectedDuration() : "0")
+                .expectedDuration(
+                        request.getExpectedDuration() != null ? request.getExpectedDuration() : "0")
                 .version(request.getVersion())
                 .content(request.getContent())
                 .scheduledAt(startTime != null ? startTime : now)
@@ -71,13 +71,15 @@ public class DeploymentServiceImpl implements DeploymentService {
             String webhookUrl = project.getJenkinsIp() + "/job/deploy/build?token=DEPLOY_TOKEN";
             LocalDateTime scheduleTime = startTime != null ? startTime : now.plusMinutes(1);
             deploymentScheduler.scheduleDeployment(webhookUrl, scheduleTime);
-            log.info("✅ Jenkins webhook scheduled for project {} at {}", project.getName(), scheduleTime);
+            log.info("✅ Jenkins webhook scheduled for project {} at {}", project.getName(),
+                     scheduleTime);
         } catch (Exception e) {
             log.error("❌ Jenkins webhook scheduling failed: {}", e.getMessage());
         }
 
         return toDto(deployment);
     }
+
     private LocalDateTime extractStartTime(String content) {
         try {
             Pattern pattern = Pattern.compile("(\\d{4}-\\d{2}-\\d{2}\\s\\d{2}:\\d{2})");

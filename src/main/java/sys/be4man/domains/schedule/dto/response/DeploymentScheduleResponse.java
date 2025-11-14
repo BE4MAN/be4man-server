@@ -14,11 +14,13 @@ public record DeploymentScheduleResponse(
         Long id,
         String title,
         String status,
+        String stage,
+        String deploymentStatus,
         String projectName,
-        String prTitle,
-        String prBranch,
         LocalDate scheduledDate,
-        LocalTime scheduledTime
+        LocalTime scheduledTime,
+        String registrant,
+        String registrantDepartment
 ) {
 
     /**
@@ -31,13 +33,23 @@ public record DeploymentScheduleResponse(
                 deployment.getIsDeployed()
         );
 
+        String registrant = deployment.getIssuer() != null ? deployment.getIssuer().getName() : null;
+        String registrantDepartment = (deployment.getIssuer() != null
+                && deployment.getIssuer().getDepartment() != null)
+                ? deployment.getIssuer().getDepartment().name()
+                : null;
+
         return DeploymentScheduleResponse.builder()
                 .id(deployment.getId())
                 .title(deployment.getTitle())
                 .status(status)
+                .stage(deployment.getStage().name())
+                .deploymentStatus(deployment.getStatus().name())
                 .projectName(deployment.getProject().getName())
                 .scheduledDate(deployment.getScheduledAt().toLocalDate())
                 .scheduledTime(deployment.getScheduledAt().toLocalTime())
+                .registrant(registrant)
+                .registrantDepartment(registrantDepartment)
                 .build();
     }
 }
