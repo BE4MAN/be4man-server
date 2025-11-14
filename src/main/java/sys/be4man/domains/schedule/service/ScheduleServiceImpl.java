@@ -4,8 +4,10 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,6 +28,7 @@ import sys.be4man.domains.deployment.model.entity.Deployment;
 import sys.be4man.domains.deployment.model.type.DeploymentStatus;
 import sys.be4man.domains.deployment.repository.DeploymentRepository;
 import sys.be4man.domains.project.model.entity.Project;
+import sys.be4man.domains.project.model.entity.RelatedProject;
 import sys.be4man.domains.project.repository.ProjectRepository;
 import sys.be4man.domains.project.repository.RelatedProjectRepository;
 import sys.be4man.domains.schedule.dto.request.CreateBanRequest;
@@ -131,7 +134,7 @@ public class ScheduleServiceImpl implements ScheduleService {
 
         LocalDateTime endedAt = request.endedAt();
         if (endedAt == null) {
-            endedAt = startedAt.plusHours(request.durationMinutes());
+            endedAt = startedAt.plusMinutes(request.durationMinutes());
         }
 
         if (endedAt.isBefore(startedAt)) {
@@ -211,13 +214,34 @@ public class ScheduleServiceImpl implements ScheduleService {
             return List.of();
         }
 
-        // N+1 쿼리 방지를 위한 배치 조회
-        List<Long> deploymentIds = deployments.stream()
-                .map(Deployment::getId)
+        // N+1 쿼리 방지를 위한 배치 조회: 각 Deployment의 project_id로 관련 프로젝트 조회
+        List<Long> deploymentProjectIds = deployments.stream()
+                .map(deployment -> deployment.getProject().getId())
+                .distinct()
                 .toList();
 
+        // 단방향 관계: project_id IN deploymentProjectIds인 경우의 relatedProject만 조회
+        List<RelatedProject> allRelatedProjects = relatedProjectRepository.findByProjectIdIn(deploymentProjectIds);
+        
+        // 각 프로젝트 ID별로 관련 프로젝트 이름 목록을 매핑
+        Map<Long, List<String>> projectRelatedServicesMap = new java.util.HashMap<>();
+        
+        for (RelatedProject rp : allRelatedProjects) {
+            Long projectId = rp.getProject().getId();
+            String relatedProjectName = rp.getRelatedProject().getName();
+            projectRelatedServicesMap.computeIfAbsent(projectId, k -> new ArrayList<>()).add(relatedProjectName);
+        }
+
+        // 각 프로젝트 ID별로 관련 서비스 목록 정렬 및 중복 제거
+        projectRelatedServicesMap.replaceAll((k, v) -> v.stream().distinct().sorted().toList());
+
+        // 각 Deployment별로 관련 프로젝트 이름 목록 생성
         return deployments.stream()
-                .map(DeploymentScheduleResponse::from)
+                .map(deployment -> {
+                    Long projectId = deployment.getProject().getId();
+                    List<String> relatedServices = projectRelatedServicesMap.getOrDefault(projectId, List.of());
+                    return DeploymentScheduleResponse.from(deployment, relatedServices);
+                })
                 .toList();
     }
 
@@ -307,81 +331,97 @@ public class ScheduleServiceImpl implements ScheduleService {
         log.info("작업 금지 기간 취소 완료 - banId: {}, accountId: {}", banId, accountId);
     }
 
-//    @Override
-//    @Transactional(readOnly = true)
-//    public BanConflictCheckResponse checkBanConflicts(
-//            List<Long> projectIds,
-//            LocalDate startDate,
-//            LocalTime startTime,
-//            Integer durationHours,
-//            RecurrenceType recurrenceType,
-//            RecurrenceWeekday recurrenceWeekday,
-//            RecurrenceWeekOfMonth recurrenceWeekOfMonth,
-//            LocalDate recurrenceEndDate,
-//            LocalDate queryStartDate,
-//            LocalDate queryEndDate
-//    ) {
-//        log.info(
-//                "Ban 충돌 체크 - projectIds: {}, startDate: {}, startTime: {}, recurrenceType: {}, queryRange: {} ~ {}",
-//                projectIds, startDate, startTime, recurrenceType, queryStartDate, queryEndDate);
-//
-//        List<Period> periods = RecurrenceCalculator.calculateRecurrenceDates(
-//                recurrenceType,
-//                startDate,
-//                startTime,
-//                durationHours,
-//                null,
-//                recurrenceWeekday,
-//                recurrenceWeekOfMonth,
-//                recurrenceEndDate,
-//                queryStartDate,
-//                queryEndDate
-//        );
-//
-//        List<Deployment> conflictingDeployments = periods.stream()
-//                .flatMap(period ->
-//                                 deploymentRepository.findOverlappingDeployments(
-//                                         period.startDateTime(),
-//                                         period.endDateTime(),
-//                                         projectIds
-//                                 ).stream())
-//                .distinct()
-//                .toList();
-//
-//        if (conflictingDeployments.isEmpty()) {
-//            return new BanConflictCheckResponse(List.of());
-//        }
-//
-//        List<Long> deploymentIds = conflictingDeployments.stream()
-//                .map(Deployment::getId)
-//                .toList();
-//
-//        Map<Long, List<String>> deploymentProjectNamesMap = relatedProjectRepository
-//                .findByDeploymentIdIn(deploymentIds)
-//                .stream()
-//                .collect(Collectors.groupingBy(
-//                        rp -> rp.getDeployment().getId(),
-//                        Collectors.mapping(
-//                                rp -> rp.getProject().getName(),
-//                                Collectors.collectingAndThen(
-//                                        Collectors.toList(),
-//                                        list -> list.stream().distinct().sorted().toList()
-//                                )
-//                        )
-//                ));
-//
-//        List<ConflictingDeploymentResponse> uniqueConflicts = conflictingDeployments.stream()
-//                .map(deployment -> new ConflictingDeploymentResponse(
-//                        deployment.getId(),
-//                        deployment.getTitle(),
-//                        deploymentProjectNamesMap.getOrDefault(deployment.getId(), List.of()),
-//                        deployment.getScheduledAt(),
-//                        deployment.getScheduledToEndedAt()
-//                ))
-//                .toList();
-//
-//        return new BanConflictCheckResponse(uniqueConflicts);
-//    }
+    @Override
+    @Transactional(readOnly = true)
+    public BanConflictCheckResponse checkBanConflicts(
+            List<Long> projectIds,
+            LocalDate startDate,
+            LocalTime startTime,
+            Integer durationMinutes,
+            RecurrenceType recurrenceType,
+            RecurrenceWeekday recurrenceWeekday,
+            RecurrenceWeekOfMonth recurrenceWeekOfMonth,
+            LocalDate recurrenceEndDate,
+            LocalDate queryStartDate,
+            LocalDate queryEndDate
+    ) {
+        log.info(
+                "Ban 충돌 체크 - projectIds: {}, startDate: {}, startTime: {}, recurrenceType: {}, queryRange: {} ~ {}",
+                projectIds, startDate, startTime, recurrenceType, queryStartDate, queryEndDate);
+
+        // projectIds와 관련된 모든 프로젝트 ID 조회 (단방향: project_id IN projectIds인 경우의 relatedProject만)
+        List<RelatedProject> relatedProjects = relatedProjectRepository.findByProjectIdIn(projectIds);
+        Set<Long> allRelatedProjectIds = new HashSet<>(projectIds);
+        for (RelatedProject rp : relatedProjects) {
+            allRelatedProjectIds.add(rp.getRelatedProject().getId());
+        }
+
+        List<Period> periods = RecurrenceCalculator.calculateRecurrenceDates(
+                recurrenceType,
+                startDate,
+                startTime,
+                durationMinutes,
+                null,
+                recurrenceWeekday,
+                recurrenceWeekOfMonth,
+                recurrenceEndDate,
+                queryStartDate,
+                queryEndDate
+        );
+
+        List<Deployment> conflictingDeployments = periods.stream()
+                .flatMap(period ->
+                                 deploymentRepository.findOverlappingDeployments(
+                                         period.startDateTime(),
+                                         period.endDateTime(),
+                                         new ArrayList<>(allRelatedProjectIds)
+                                 ).stream())
+                .distinct()
+                .toList();
+
+        if (conflictingDeployments.isEmpty()) {
+            return new BanConflictCheckResponse(List.of());
+        }
+
+        // 각 Deployment의 project_id로 관련 프로젝트 조회 (단방향)
+        List<Long> deploymentProjectIds = conflictingDeployments.stream()
+                .map(deployment -> deployment.getProject().getId())
+                .distinct()
+                .toList();
+
+        List<RelatedProject> deploymentRelatedProjects = relatedProjectRepository.findByProjectIdIn(deploymentProjectIds);
+
+        // 각 프로젝트 ID별로 관련 프로젝트 이름 목록을 매핑
+        Map<Long, List<String>> projectRelatedServicesMap = new java.util.HashMap<>();
+        for (RelatedProject rp : deploymentRelatedProjects) {
+            Long projectId = rp.getProject().getId();
+            String relatedProjectName = rp.getRelatedProject().getName();
+            projectRelatedServicesMap.computeIfAbsent(projectId, k -> new ArrayList<>()).add(relatedProjectName);
+        }
+        
+        // 각 프로젝트 ID별로 관련 서비스 목록 정렬 및 중복 제거
+        projectRelatedServicesMap.replaceAll((k, v) -> v.stream().distinct().sorted().toList());
+
+        // 각 Deployment별로 관련 프로젝트 이름 목록 생성
+        Map<Long, List<String>> deploymentRelatedServicesMap = new java.util.HashMap<>();
+        for (Deployment deployment : conflictingDeployments) {
+            Long projectId = deployment.getProject().getId();
+            List<String> relatedServices = projectRelatedServicesMap.getOrDefault(projectId, List.of());
+            deploymentRelatedServicesMap.put(deployment.getId(), relatedServices);
+        }
+
+        List<ConflictingDeploymentResponse> uniqueConflicts = conflictingDeployments.stream()
+                .map(deployment -> new ConflictingDeploymentResponse(
+                        deployment.getId(),
+                        deployment.getTitle(),
+                        deploymentRelatedServicesMap.getOrDefault(deployment.getId(), List.of()),
+                        deployment.getScheduledAt(),
+                        deployment.getScheduledToEndedAt()
+                ))
+                .toList();
+
+        return new BanConflictCheckResponse(uniqueConflicts);
+    }
 
     /**
      * 권한 검증 (MANAGER, HEAD만 허용)
