@@ -20,8 +20,8 @@ public class PullRequestServiceImpl implements PullRequestService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<PullRequestResponse> getAllByGithubEmail(String githubEmail) {
-        return repository.findByGithubEmail(githubEmail).stream()
+    public List<PullRequestResponse> getAllByGithubId(Long githubId) {
+        return repository.findByGithubId(githubId).stream()
                 .map(this::toDto)
                 .collect(Collectors.toList());
     }
@@ -44,6 +44,7 @@ public class PullRequestServiceImpl implements PullRequestService {
                 .prNumber(request.getPrNumber())
                 .repositoryUrl(request.getRepositoryUrl())
                 .branch(request.getBranch())
+                .githubId(request.getGithubId())
                 .build();
 
         repository.save(pr);
@@ -55,7 +56,7 @@ public class PullRequestServiceImpl implements PullRequestService {
         PullRequest pr = repository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("PR not found id=" + id));
 
-        pr.update(request.getRepositoryUrl(), request.getBranch());
+//        pr.update(request.getRepositoryUrl(), request.getBranch());
         return toDto(pr);
     }
 
@@ -73,6 +74,7 @@ public class PullRequestServiceImpl implements PullRequestService {
                 .prNumber(pr.getPrNumber())
                 .repositoryUrl(pr.getRepositoryUrl())
                 .branch(pr.getBranch())
+                .githubId(pr.getId())
                 .createdAt(pr.getCreatedAt())
                 .updatedAt(pr.getUpdatedAt())
                 .build();

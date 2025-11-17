@@ -21,7 +21,7 @@ public class ApprovalLine extends BaseEntity {
     private Long id;
 
     /** 결재 ID (Approval) */
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "approval_id", nullable = false)
     private Approval approval;
 
@@ -44,8 +44,8 @@ public class ApprovalLine extends BaseEntity {
     private LocalDateTime approvedAt;
 
     /** 승인 여부 */
-    @Column(name = "is_approved", nullable = false)
-    private Boolean isApproved = false;
+    @Column(name = "is_approved")
+    private Boolean isApproved;
 
     @Builder
     private ApprovalLine(
@@ -61,7 +61,7 @@ public class ApprovalLine extends BaseEntity {
         this.comment = (comment != null) ? comment : "";
         this.type = (type != null) ? type : ApprovalLineType.APPROVE;
         this.approvedAt = approvedAt;
-        this.isApproved = (isApproved != null) ? isApproved : false;
+        this.isApproved = isApproved;
     }
 
     /** 결재 참조 연결 */
@@ -85,4 +85,13 @@ public class ApprovalLine extends BaseEntity {
         this.isApproved = false;
         this.approvedAt = LocalDateTime.now();
     }
+
+    public void updateApproved(boolean approved) {
+        this.isApproved = approved;
+    }
+
+    public void updateApprovedAt(LocalDateTime dateTime) {
+        this.approvedAt = dateTime;
+    }
+
 }

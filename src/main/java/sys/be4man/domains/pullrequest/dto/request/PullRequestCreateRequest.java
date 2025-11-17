@@ -15,4 +15,5 @@ public class PullRequestCreateRequest {
     private String repositoryUrl;
     private String branch;
     private String githubEmail;
+    private Long githubId;
 }

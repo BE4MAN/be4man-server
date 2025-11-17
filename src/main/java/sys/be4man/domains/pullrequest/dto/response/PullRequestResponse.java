@@ -13,6 +13,7 @@ public class PullRequestResponse {
     private String repositoryUrl;
     private String branch;
     private String githubEmail;
+    private Long githubId;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }
