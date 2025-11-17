@@ -4,6 +4,8 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -69,6 +71,7 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
 
                 // CORS 설정
+                .cors(Customizer.withDefaults())
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
 
                 // Form Login 비활성화 (JWT 사용)
@@ -104,6 +107,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                                                // 공개 경로: 인증 없이 접근 가능
                                                // TODO: 구현 후 WHITE_LIST 적용
+                                               .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                                                .anyRequest().permitAll()
 
                                        // 나머지 모든 요청은 인증 필요
