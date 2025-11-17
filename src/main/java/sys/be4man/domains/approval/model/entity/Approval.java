@@ -65,6 +65,7 @@ public class Approval extends BaseEntity {
     private String service;
 
     @OneToMany(mappedBy = "approval", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("id ASC")
     private List<ApprovalLine> approvalLines = new ArrayList<>();
 
     @Builder
@@ -83,7 +84,7 @@ public class Approval extends BaseEntity {
         this.deployment = deployment;
         this.account = account;
         this.nextApprover = nextApprover;
-        this.isApproved = (isApproved != null) ? isApproved : false;
+        this.isApproved = isApproved;
         this.approvedAt = approvedAt;
         this.type = type;
         this.title = title;
@@ -100,7 +101,13 @@ public class Approval extends BaseEntity {
     public void approve() {
         this.isApproved = true;
         this.status = ApprovalStatus.APPROVED;
-        this.approvedAt = LocalDateTime.now();
+
+        this.approvedAt = this.approvalLines.stream()
+                .filter(l -> Boolean.TRUE.equals(l.getIsApproved()))
+                .map(ApprovalLine::getApprovedAt)
+                .max(LocalDateTime::compareTo)
+                .orElse(LocalDateTime.now());
+
         this.nextApprover = null;
     }
 
@@ -116,7 +123,6 @@ public class Approval extends BaseEntity {
     public void reject() {
         this.isApproved = false;
         this.status = ApprovalStatus.REJECTED;
-        this.approvedAt = null;
     }
 
     public void addApprovalLine(ApprovalLine line) {
@@ -128,4 +134,13 @@ public class Approval extends BaseEntity {
     public void updateNextApprover(Account nextApprover) {
         this.nextApprover = nextApprover;
     }
+
+    public void updateApprovedAt(LocalDateTime approvedAt) {
+        this.approvedAt = approvedAt;
+    }
+
+    public void updateTitle(String title) { this.title = title; }
+    public void updateContent(String content) { this.content = content; }
+    public void updateService(String service) { this.service = service; }
+    public void updateType(ApprovalType type) { this.type = type; }
 }

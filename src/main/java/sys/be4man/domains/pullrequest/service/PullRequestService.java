@@ -7,7 +7,7 @@ import sys.be4man.domains.pullrequest.dto.request.PullRequestUpdateRequest;
 
 public interface PullRequestService {
 
-    List<PullRequestResponse> getAllByGithubEmail(String githubEmail);
+    List<PullRequestResponse> getAllByGithubId(Long githubId);
 
     PullRequestResponse getById(Long id);
 

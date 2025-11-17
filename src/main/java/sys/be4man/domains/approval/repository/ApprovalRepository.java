@@ -1,15 +1,14 @@
 package sys.be4man.domains.approval.repository;
 
 import java.util.List;
+import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import sys.be4man.domains.approval.model.entity.Approval;
 import sys.be4man.domains.approval.model.type.ApprovalStatus;
-import sys.be4man.domains.approval.model.type.ApprovalType;
-import sys.be4man.domains.deployment.model.type.DeploymentStage;
 
-public interface ApprovalRepository extends JpaRepository<Approval, Long>, ApprovalRepositoryCustom {
+public interface ApprovalRepository extends JpaRepository<Approval, Long> {
 
     List<Approval> findByAccountId(Long accountId);
     List<Approval> findByAccountIdAndStatus(Long accountId, ApprovalStatus status);
@@ -41,5 +40,11 @@ public interface ApprovalRepository extends JpaRepository<Approval, Long>, Appro
             @Param("status") ApprovalStatus status
     );
 
-    List<Approval> findByDeploymentIdAndTypeOrderByIdAsc(Long taskId, ApprovalType approvalType);
+    @Query("""
+      select a
+      from Approval a
+      left join fetch a.approvalLines
+      where a.id = :id
+    """)
+    Optional<Approval> findByIdWithLines(@Param("id") Long id);
 }

@@ -5,30 +5,33 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import sys.be4man.domains.pullrequest.dto.request.PullRequestCreateRequest;
-import sys.be4man.domains.pullrequest.dto.response.PullRequestResponse;
 import sys.be4man.domains.pullrequest.dto.request.PullRequestUpdateRequest;
+import sys.be4man.domains.pullrequest.dto.response.PullRequestResponse;
 import sys.be4man.domains.pullrequest.service.PullRequestService;
 
 @Tag(name = "Pull Request", description = "Pull Request 관련 API")
 @RestController
 @RequestMapping("/api/prs")
 @RequiredArgsConstructor
+@Slf4j
 public class PullRequestController {
 
     private final PullRequestService pullRequestService;
 
     @Operation(
             summary = "내 PR 목록 조회",
-            description = "githubEmail 기준으로 자신이 생성한 Pull Request 목록만 조회합니다."
+            description = "githubId 기준으로 자신이 생성한 Pull Request 목록만 조회합니다."
     )
     @GetMapping
-    public ResponseEntity<List<PullRequestResponse>> getAllByEmail(
-            @RequestParam String githubEmail
+    public ResponseEntity<List<PullRequestResponse>> getAllByGithubId(
+            @RequestParam Long githubId
     ) {
-        return ResponseEntity.ok(pullRequestService.getAllByGithubEmail(githubEmail));
+        log.warn(String.valueOf(githubId));
+        return ResponseEntity.ok(pullRequestService.getAllByGithubId(githubId));
     }
 
     @Operation(
@@ -98,7 +101,8 @@ public class PullRequestController {
         JsonNode prNode = payload.path("pull_request");
         boolean merged = prNode.path("merged").asBoolean(false);
         String baseRef = prNode.path("base").path("ref").asText("");
-        String githubEmail = prNode.path("user").path("email").asText(null);
+
+        Long githubId = prNode.path("user").path("id").asLong(0L);
 
         if (!merged || !baseRef.contains("develop")) {
             return ResponseEntity.ok("IGNORED_NOT_MERGED_OR_NOT_DEVELOP");
@@ -112,7 +116,7 @@ public class PullRequestController {
                 .prNumber(prNumber)
                 .repositoryUrl(repositoryUrl)
                 .branch(branch)
-                .githubEmail(githubEmail)
+                .githubId(githubId)
                 .build();
 
         PullRequestResponse saved = pullRequestService.create(request);
