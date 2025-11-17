@@ -24,19 +24,21 @@ public class TaskDetailTimelineService {
 
     private static final DateTimeFormatter DATETIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy.MM.dd HH:mm");
 
-    /**
-     * ✅ 수정: Deployment 기반 타임라인 생성
-     * - planApprovals, reportApprovals는 상세 정보 참조용으로만 사용
-     */
-    public List<TimelineStepDto> buildTimeline(
-            Deployment deployment,
-            List<Approval> planApprovals,
-            List<Approval> reportApprovals,
-            BuildRun buildRun
-    ) {
+    // TaskDetailTimelineService.java - buildTimeline() 메서드 수정
+
+    public List<TimelineStepDto> buildTimeline(Deployment deployment, List<Approval> planApprovals,
+            List<Approval> reportApprovals, BuildRun buildRun) {
         log.debug("타임라인 생성 - deploymentId: {}", deployment.getId());
 
         List<TimelineStepDto> timeline = new ArrayList<>();
+
+        // ✅ 배포 타입 텍스트 결정
+        String deploymentTypeText = "";
+        if (deployment.getStage() == DeploymentStage.ROLLBACK) {
+            deploymentTypeText = " (롤백)";
+        } else if (deployment.getStage() == DeploymentStage.RETRY) {
+            deploymentTypeText = " (재배포)";
+        }
 
         // 1. 작업 신청
         timeline.add(TimelineStepDto.builder()
@@ -54,48 +56,68 @@ public class TaskDetailTimelineService {
         String planApprovalDescription = null;
         String planApprovalResult = null;
 
-// ✅ 승인 라인에서 거절 여부 먼저 체크
-        boolean isPlanRejected = checkIfRejected(planApprovals);
+        boolean isRejectedByApprovalLine = false;
+        LocalDateTime rejectedAt = null;
 
-        if (isPlanRejected) {
-            // ✅ 승인 라인에서 거절된 경우
-            planApprovalStatus = "completed";
-            planApprovalResult = "failure";
-            planApprovalCompletedAt = getRejectedTime(planApprovals);
-            if (planApprovalCompletedAt == null) {
-                planApprovalCompletedAt = deployment.getUpdatedAt();
+        if (!planApprovals.isEmpty()) {
+            Approval approval = planApprovals.get(0);
+
+            for (ApprovalLine line : approval.getApprovalLines()) {
+                if (line.getType() != ApprovalLineType.CC) {
+                    Boolean isApproved = line.getIsApproved();
+                    if (isApproved != null && !isApproved) {
+                        isRejectedByApprovalLine = true;
+                        rejectedAt = line.getApprovedAt();
+                        break;
+                    }
+                }
             }
-            planApprovalDescription = "반려";
-        } else if (deployment.getStatus() == DeploymentStatus.APPROVED) {
-            planApprovalStatus = "completed";
-            planApprovalResult = "success";
-            planApprovalCompletedAt = getPlanApprovalCompletedTime(planApprovals);
-            if (planApprovalCompletedAt == null) {
-                planApprovalCompletedAt = deployment.getUpdatedAt();
+
+            boolean allApproved = approval.getApprovalLines().stream()
+                    .filter(line -> line.getType() != ApprovalLineType.CC)
+                    .allMatch(line -> {
+                        Boolean isApproved = line.getIsApproved();
+                        return isApproved != null && isApproved;
+                    });
+
+            if (isRejectedByApprovalLine) {
+                planApprovalStatus = "completed";
+                planApprovalResult = "failure";
+                planApprovalCompletedAt = rejectedAt != null ? rejectedAt : deployment.getUpdatedAt();
+                planApprovalDescription = "반려";
+            } else if (allApproved) {
+                planApprovalStatus = "completed";
+                planApprovalResult = "success";
+                planApprovalCompletedAt = approval.getApprovedAt() != null ? approval.getApprovedAt() : deployment.getUpdatedAt();
+                planApprovalDescription = "승인 완료";
+            } else {
+                planApprovalStatus = "active";
+                planApprovalDescription = "승인 대기중";
             }
-            planApprovalDescription = "승인 완료";
-        } else if (deployment.getStatus() == DeploymentStatus.PENDING &&
-                deployment.getStage() == DeploymentStage.PLAN) {
-            planApprovalStatus = "active";
-            planApprovalResult = null;
-            planApprovalCompletedAt = null;
-            planApprovalDescription = "승인 대기중";
-        } else if (deployment.getStatus() == DeploymentStatus.REJECTED) {
-            planApprovalStatus = "completed";
-            planApprovalResult = "failure";
-            planApprovalCompletedAt = deployment.getUpdatedAt();
-            planApprovalDescription = "반려";
-        } else if (deployment.getStage() == DeploymentStage.DEPLOYMENT ||
-                deployment.getStage() == DeploymentStage.REPORT ||
-                deployment.getStage() == DeploymentStage.RETRY ||
-                deployment.getStage() == DeploymentStage.ROLLBACK) {
-            planApprovalStatus = "completed";
-            planApprovalResult = "success";
-            planApprovalCompletedAt = getPlanApprovalCompletedTime(planApprovals);
-            if (planApprovalCompletedAt == null) {
+        } else {
+            if (deployment.getStatus() == DeploymentStatus.APPROVED) {
+                planApprovalStatus = "completed";
+                planApprovalResult = "success";
                 planApprovalCompletedAt = deployment.getUpdatedAt();
+                planApprovalDescription = "승인 완료";
+            } else if (deployment.getStatus() == DeploymentStatus.REJECTED) {
+                planApprovalStatus = "completed";
+                planApprovalResult = "failure";
+                planApprovalCompletedAt = deployment.getUpdatedAt();
+                planApprovalDescription = "반려";
+            } else if (deployment.getStatus() == DeploymentStatus.PENDING &&
+                    deployment.getStage() == DeploymentStage.PLAN) {
+                planApprovalStatus = "active";
+                planApprovalDescription = "승인 대기중";
+            } else if (deployment.getStage() == DeploymentStage.DEPLOYMENT ||
+                    deployment.getStage() == DeploymentStage.REPORT ||
+                    deployment.getStage() == DeploymentStage.RETRY ||
+                    deployment.getStage() == DeploymentStage.ROLLBACK) {
+                planApprovalStatus = "completed";
+                planApprovalResult = "success";
+                planApprovalCompletedAt = deployment.getUpdatedAt();
+                planApprovalDescription = "승인 완료";
             }
-            planApprovalDescription = "승인 완료";
         }
 
         timeline.add(TimelineStepDto.builder()
@@ -107,59 +129,57 @@ public class TaskDetailTimelineService {
                 .description(planApprovalDescription)
                 .build());
 
-
-        // 3. 배포중
-        LocalDateTime deploymentStartedAt = deployment.getScheduledAt();
+        // 3. 배포중 ✅ (재배포)/(롤백) 추가
+        LocalDateTime deploymentStartedAt = null;
         String deploymentStatus = "pending";
         String deploymentStartDescription = null;
 
-        boolean deploymentStarted = deploymentStartedAt != null &&
-                (deployment.getStage() == DeploymentStage.DEPLOYMENT ||
-                        deployment.getStage() == DeploymentStage.RETRY ||
-                        deployment.getStage() == DeploymentStage.ROLLBACK ||
-                        deployment.getStage() == DeploymentStage.REPORT);
+        boolean isDeploymentStarted = (deployment.getStage() == DeploymentStage.DEPLOYMENT ||
+                deployment.getStage() == DeploymentStage.RETRY ||
+                deployment.getStage() == DeploymentStage.ROLLBACK ||
+                deployment.getStage() == DeploymentStage.REPORT);
 
-        if (deploymentStarted) {
+        if (isDeploymentStarted) {
+            deploymentStartedAt = deployment.getScheduledAt();
+
             if (deployment.getStatus() == DeploymentStatus.IN_PROGRESS) {
                 deploymentStatus = "active";
                 deploymentStartDescription = "배포 진행중";
             } else if (deployment.getStatus() == DeploymentStatus.COMPLETED ||
                     deployment.getStage() == DeploymentStage.REPORT) {
                 deploymentStatus = "completed";
-                deploymentStartDescription = "배포 시작";
+                deploymentStartDescription = "배포 완료";
             }
-        } else if (planApprovalStatus.equals("completed")) {
+        } else if (planApprovalStatus.equals("completed") &&
+                planApprovalResult != null &&
+                planApprovalResult.equals("success")) {
             deploymentStatus = "pending";
-            deploymentStartDescription = null;
         }
 
         timeline.add(TimelineStepDto.builder()
                 .stepNumber(3)
-                .stepName("배포중")
+                .stepName("배포중" + deploymentTypeText)  // ✅ 배포 타입 추가
                 .status(deploymentStatus)
                 .result(null)
-                .timestamp(deploymentStarted ? formatDateTime(deploymentStartedAt) : null)
+                .timestamp(deploymentStartedAt != null ? formatDateTime(deploymentStartedAt) : null)
                 .description(deploymentStartDescription)
                 .build());
 
-        // 4. 배포 종료
-        LocalDateTime deploymentEndedAt = buildRun != null ? buildRun.getEndedAt()
-                : deployment.getScheduledToEndedAt();
-
+        // 4. 배포 종료 ✅ (재배포)/(롤백) 추가
+        LocalDateTime deploymentEndedAt = null;
         String deploymentEndStatus = "pending";
         String deploymentEndResult = null;
         String deploymentEndDescription = null;
 
-// ✅ 배포 상태에 따라 종료 결과 표시
         if (deployment.getStatus() == DeploymentStatus.COMPLETED) {
             deploymentEndStatus = "completed";
 
-            // ✅ endedAt이 없으면 현재 시간 사용
-            if (deploymentEndedAt == null) {
+            if (buildRun != null && buildRun.getEndedAt() != null) {
+                deploymentEndedAt = buildRun.getEndedAt();
+            } else {
                 deploymentEndedAt = deployment.getUpdatedAt();
             }
 
-            // ✅ 배포 성공/실패 판정
             if (deployment.getIsDeployed() != null) {
                 if (deployment.getIsDeployed()) {
                     deploymentEndResult = "success";
@@ -173,10 +193,11 @@ public class TaskDetailTimelineService {
                 deploymentEndDescription = "배포 완료";
             }
         } else if (deployment.getStage() == DeploymentStage.REPORT) {
-            // 결과보고 단계면 배포는 완료된 것
             deploymentEndStatus = "completed";
 
-            if (deploymentEndedAt == null) {
+            if (buildRun != null && buildRun.getEndedAt() != null) {
+                deploymentEndedAt = buildRun.getEndedAt();
+            } else {
                 deploymentEndedAt = deployment.getUpdatedAt();
             }
 
@@ -187,18 +208,14 @@ public class TaskDetailTimelineService {
                 deploymentEndResult = "success";
                 deploymentEndDescription = "배포 완료";
             }
-        } else if (deployment.getStatus() == DeploymentStatus.IN_PROGRESS) {
-            // IN_PROGRESS면 배포중 상태 유지
-            deploymentEndStatus = "active";
-            deploymentEndDescription = "배포 진행중";
         }
 
         timeline.add(TimelineStepDto.builder()
                 .stepNumber(4)
-                .stepName("배포종료")
+                .stepName("배포종료" + deploymentTypeText)  // ✅ 배포 타입 추가
                 .status(deploymentEndStatus)
                 .result(deploymentEndResult)
-                .timestamp(formatDateTime(deploymentEndedAt))  // ✅ 이제 시간 표시됨
+                .timestamp(formatDateTime(deploymentEndedAt))
                 .description(deploymentEndDescription)
                 .build());
 
@@ -208,17 +225,10 @@ public class TaskDetailTimelineService {
         String reportCreatedDescription = null;
 
         if (deployment.getStage() == DeploymentStage.REPORT) {
-            // 결과보고가 있으면 작성 완료
-            if (!reportApprovals.isEmpty()) {
-                Approval reportApproval = reportApprovals.get(0);
-                reportCreatedAt = reportApproval.getCreatedAt();
-            } else {
-                reportCreatedAt = deployment.getUpdatedAt();
-            }
+            reportCreatedAt = deployment.getUpdatedAt();
             reportCreatedStatus = "completed";
             reportCreatedDescription = "결과보고 작성 완료";
         } else if (deploymentEndStatus.equals("completed")) {
-            // 배포가 완료되었으면 대기중
             reportCreatedStatus = "pending";
         }
 
@@ -234,29 +244,65 @@ public class TaskDetailTimelineService {
         // 6. 결과보고 승인
         String reportApprovalStatus = "pending";
         String reportApprovalDescription = null;
+        String reportApprovalResult = null;
         LocalDateTime reportApprovalCompletedAt = null;
 
-        if (deployment.getStage() == DeploymentStage.REPORT) {
-            if (deployment.getStatus() == DeploymentStatus.COMPLETED) {
-                // 승인 완료
-                reportApprovalStatus = "completed";
-                reportApprovalCompletedAt = getReportApprovalCompletedTime(reportApprovals);
-                if (reportApprovalCompletedAt == null) {
-                    reportApprovalCompletedAt = deployment.getUpdatedAt();
+        boolean isReportRejected = false;
+        boolean isReportAllApproved = false;
+        LocalDateTime reportRejectedAt = null;
+
+        if (!reportApprovals.isEmpty() && deployment.getStage() == DeploymentStage.REPORT) {
+            Approval reportApproval = reportApprovals.get(0);
+
+            for (ApprovalLine line : reportApproval.getApprovalLines()) {
+                if (line.getType() != ApprovalLineType.CC) {
+                    Boolean isApproved = line.getIsApproved();
+                    if (isApproved != null && !isApproved) {
+                        isReportRejected = true;
+                        reportRejectedAt = line.getApprovedAt();
+                        break;
+                    }
                 }
+            }
+
+            isReportAllApproved = reportApproval.getApprovalLines().stream()
+                    .filter(line -> line.getType() != ApprovalLineType.CC)
+                    .allMatch(line -> {
+                        Boolean isApproved = line.getIsApproved();
+                        return isApproved != null && isApproved;
+                    });
+
+            if (isReportRejected) {
+                reportApprovalStatus = "completed";
+                reportApprovalResult = "failure";
+                reportApprovalCompletedAt = reportRejectedAt != null ? reportRejectedAt : deployment.getUpdatedAt();
+                reportApprovalDescription = "반려";
+            } else if (isReportAllApproved) {
+                reportApprovalStatus = "completed";
+                reportApprovalResult = "success";
+                reportApprovalCompletedAt = reportApproval.getApprovedAt() != null ?
+                        reportApproval.getApprovedAt() : deployment.getUpdatedAt();
+                reportApprovalDescription = "승인 완료";
+            } else {
+                reportApprovalStatus = "active";
+                reportApprovalDescription = "승인 대기중";
+            }
+        } else if (deployment.getStage() == DeploymentStage.REPORT) {
+            if (deployment.getStatus() == DeploymentStatus.COMPLETED) {
+                reportApprovalStatus = "completed";
+                reportApprovalResult = "success";
+                reportApprovalCompletedAt = deployment.getUpdatedAt();
                 reportApprovalDescription = "승인 완료";
             } else if (deployment.getStatus() == DeploymentStatus.PENDING) {
-                // 승인 대기중
                 reportApprovalStatus = "active";
                 reportApprovalDescription = "승인 대기중";
             } else if (deployment.getStatus() == DeploymentStatus.REJECTED) {
-                // 반려
-                reportApprovalStatus = "rejected";
+                reportApprovalStatus = "completed";
+                reportApprovalResult = "failure";
                 reportApprovalCompletedAt = deployment.getUpdatedAt();
                 reportApprovalDescription = "반려";
             }
         } else if (reportCreatedStatus.equals("completed")) {
-            // 결과보고가 작성되었으면 대기중
             reportApprovalStatus = "pending";
         }
 
@@ -264,7 +310,7 @@ public class TaskDetailTimelineService {
                 .stepNumber(6)
                 .stepName("결과보고승인")
                 .status(reportApprovalStatus)
-                .result(null)
+                .result(reportApprovalResult)
                 .timestamp(formatDateTime(reportApprovalCompletedAt))
                 .description(reportApprovalDescription)
                 .build());
@@ -273,95 +319,7 @@ public class TaskDetailTimelineService {
         return timeline;
     }
 
-    /**
-     * 계획서 승인 완료 시각 가져오기 (Approval에서)
-     */
-    private LocalDateTime getPlanApprovalCompletedTime(List<Approval> planApprovals) {
-        if (planApprovals.isEmpty()) {
-            return null;
-        }
-
-        Approval approval = planApprovals.get(0);
-
-        // 모든 승인자가 승인했는지 확인
-        boolean allApproved = approval.getApprovalLines().stream()
-                .filter(line -> line.getType() != ApprovalLineType.CC)
-                .allMatch(line -> {
-                    Boolean isApproved = line.getIsApproved();
-                    return isApproved != null && isApproved;
-                });
-
-        if (!allApproved) {
-            return null;
-        }
-
-        return approval.getApprovedAt();
-    }
-
-    /**
-     * 결과보고 승인 완료 시각 가져오기 (Approval에서)
-     */
-    private LocalDateTime getReportApprovalCompletedTime(List<Approval> reportApprovals) {
-        if (reportApprovals.isEmpty()) {
-            return null;
-        }
-
-        Approval approval = reportApprovals.get(0);
-
-        // 모든 승인자가 승인했는지 확인
-        boolean allApproved = approval.getApprovalLines().stream()
-                .filter(line -> line.getType() != ApprovalLineType.CC)
-                .allMatch(line -> {
-                    Boolean isApproved = line.getIsApproved();
-                    return isApproved != null && isApproved;
-                });
-
-        if (!allApproved) {
-            return null;
-        }
-
-        return approval.getApprovedAt();
-    }
-
     private String formatDateTime(LocalDateTime dateTime) {
         return dateTime != null ? dateTime.format(DATETIME_FORMATTER) : null;
-    }
-
-
-    /**
-     * 승인 라인에서 거절 여부 확인
-     */
-    private boolean checkIfRejected(List<Approval> approvals) {
-        if (approvals.isEmpty()) {
-            return false;
-        }
-
-        Approval approval = approvals.get(0);
-        return approval.getApprovalLines().stream()
-                .filter(line -> line.getType() != ApprovalLineType.CC)
-                .anyMatch(line -> {
-                    Boolean isApproved = line.getIsApproved();
-                    return isApproved != null && !isApproved;
-                });
-    }
-
-    /**
-     * 거절된 시간 가져오기
-     */
-    private LocalDateTime getRejectedTime(List<Approval> approvals) {
-        if (approvals.isEmpty()) {
-            return null;
-        }
-
-        Approval approval = approvals.get(0);
-        return approval.getApprovalLines().stream()
-                .filter(line -> line.getType() != ApprovalLineType.CC)
-                .filter(line -> {
-                    Boolean isApproved = line.getIsApproved();
-                    return isApproved != null && !isApproved;
-                })
-                .map(ApprovalLine::getUpdatedAt)
-                .findFirst()
-                .orElse(null);
     }
 }

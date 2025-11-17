@@ -2,17 +2,16 @@ package sys.be4man.domains.taskmanagement.dto;
 
 import lombok.*;
 import sys.be4man.domains.approval.model.entity.Approval;
-import sys.be4man.domains.approval.model.type.ApprovalStatus;
+import sys.be4man.domains.approval.model.entity.ApprovalLine;
+import sys.be4man.domains.approval.model.type.ApprovalLineType;
 import sys.be4man.domains.deployment.model.entity.Deployment;
 import sys.be4man.domains.deployment.model.type.DeploymentStatus;
 import sys.be4man.domains.deployment.model.type.DeploymentStage;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 
-/**
- * 작업 관리 페이지 응답 DTO
- */
 @Getter
 @Setter
 @NoArgsConstructor
@@ -22,25 +21,26 @@ public class TaskManagementResponseDto {
 
     private static final DateTimeFormatter DATETIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy.MM.dd HH:mm");
 
-    private Long id;                    // 작업 번호
-    private String drafter;             // 기안자
-    private String department;          // 부서
-    private String serviceName;         // 서비스명
-    private String taskTitle;           // 작업 제목
-    private String stage;               // 처리 단계 (계획서/배포/결과보고)
-    private String status;              // 처리 상태
-    private String completionTime;      // 완료 시각 (yyyy.MM.dd HH:mm)
-    private String result;              // 배포 결과 (성공/실패/null)
+    private Long id;
+    private String drafter;
+    private String department;
+    private String serviceName;
+    private String taskTitle;
+    private String stage;
+    private String status;
+    private String completionTime;
+    private String result;
 
-    /**
-     * ✅ 수정: Deployment 엔티티로부터 DTO 생성
-     * - 배포 대기 상태는 "계획서 - 승인완료"로 표시
-     */
-    /**
-     * ✅ 수정: Deployment 엔티티로부터 DTO 생성
-     * - 배포 단계에서 IN_PROGRESS/COMPLETED/CANCELED가 아니면 화면에서 숨김
-     */
     public TaskManagementResponseDto(Deployment deployment) {
+        this(deployment, null, null);
+    }
+
+    public TaskManagementResponseDto(Deployment deployment, List<Approval> approvals) {
+        this(deployment, approvals, null);
+    }
+
+    // ✅ reportApprovals 파라미터 추가
+    public TaskManagementResponseDto(Deployment deployment, List<Approval> planApprovals, List<Approval> reportApprovals) {
         this.id = deployment.getId();
         this.drafter = deployment.getIssuer() != null ? deployment.getIssuer().getName() : null;
         this.department = deployment.getIssuer() != null && deployment.getIssuer().getDepartment() != null
@@ -48,13 +48,138 @@ public class TaskManagementResponseDto {
         this.serviceName = deployment.getProject() != null ? deployment.getProject().getName() : null;
         this.taskTitle = deployment.getTitle();
         this.stage = getDeploymentStageKorean(deployment.getStage());
-        this.status = getDeploymentStatusKorean(deployment.getStatus());
-        this.completionTime = formatDeploymentCompletionTime(deployment);
+
+        // ✅ planApprovals와 reportApprovals 모두 전달
+        determineStatusAndTime(deployment, planApprovals, reportApprovals);
+
         this.result = getDeploymentResult(deployment);
     }
+
     /**
-     * DeploymentStage를 한글로 변환
+     * ✅ ApprovalLine을 확인하여 실제 상태 결정 (PLAN, REPORT 모두 확인)
      */
+    private void determineStatusAndTime(Deployment deployment, List<Approval> planApprovals, List<Approval> reportApprovals) {
+        DeploymentStage stage = deployment.getStage();
+
+        // ✅ 결과보고 단계일 때는 reportApprovals 확인
+        if (stage == DeploymentStage.REPORT && reportApprovals != null && !reportApprovals.isEmpty()) {
+            Approval reportApproval = reportApprovals.get(0);
+
+            // 반려 확인
+            boolean isRejected = false;
+            LocalDateTime rejectedAt = null;
+            for (ApprovalLine line : reportApproval.getApprovalLines()) {
+                if (line.getType() != ApprovalLineType.CC) {
+                    Boolean isApproved = line.getIsApproved();
+                    if (isApproved != null && !isApproved) {
+                        isRejected = true;
+                        rejectedAt = line.getApprovedAt();
+                        break;
+                    }
+                }
+            }
+
+            if (isRejected) {
+                this.status = "반려";
+                this.completionTime = formatDateTime(rejectedAt != null ? rejectedAt : deployment.getUpdatedAt());
+                return;
+            }
+
+            // 전체 승인 완료 확인
+            boolean allApproved = reportApproval.getApprovalLines().stream()
+                    .filter(line -> line.getType() != ApprovalLineType.CC)
+                    .allMatch(line -> {
+                        Boolean isApproved = line.getIsApproved();
+                        return isApproved != null && isApproved;
+                    });
+
+            if (allApproved) {
+                this.status = "승인";
+                this.completionTime = formatDateTime(reportApproval.getApprovedAt() != null ?
+                        reportApproval.getApprovedAt() : deployment.getUpdatedAt());
+                return;
+            }
+
+            // 대기중
+            this.status = "대기";
+            this.completionTime = null;
+            return;
+        }
+
+        // ✅ 계획서 단계일 때는 planApprovals 확인
+        if (planApprovals != null && !planApprovals.isEmpty()) {
+            Approval approval = planApprovals.get(0);
+
+            // 반려 확인
+            boolean isRejectedByApprovalLine = false;
+            LocalDateTime rejectedAt = null;
+            for (ApprovalLine line : approval.getApprovalLines()) {
+                if (line.getType() != ApprovalLineType.CC) {
+                    Boolean isApproved = line.getIsApproved();
+                    if (isApproved != null && !isApproved) {
+                        isRejectedByApprovalLine = true;
+                        rejectedAt = line.getApprovedAt();
+                        break;
+                    }
+                }
+            }
+
+            if (isRejectedByApprovalLine) {
+                this.status = "반려";
+                this.completionTime = formatDateTime(rejectedAt != null ? rejectedAt : deployment.getUpdatedAt());
+                return;
+            }
+
+            // 전체 승인 완료 확인
+            boolean allApproved = approval.getApprovalLines().stream()
+                    .filter(line -> line.getType() != ApprovalLineType.CC)
+                    .allMatch(line -> {
+                        Boolean isApproved = line.getIsApproved();
+                        return isApproved != null && isApproved;
+                    });
+
+            if (allApproved && stage == DeploymentStage.PLAN) {
+                this.status = "승인";
+                this.completionTime = formatDateTime(approval.getApprovedAt() != null ?
+                        approval.getApprovedAt() : deployment.getUpdatedAt());
+                return;
+            }
+        }
+
+        // ✅ 기본 로직 (Deployment 상태 기반)
+        DeploymentStatus deploymentStatus = deployment.getStatus();
+
+        switch (deploymentStatus) {
+            case PENDING:
+                this.status = "대기";
+                this.completionTime = null;
+                break;
+            case APPROVED:
+                this.status = "승인";
+                this.completionTime = formatDateTime(deployment.getUpdatedAt());
+                break;
+            case IN_PROGRESS:
+                this.status = "진행중";
+                this.completionTime = null;
+                break;
+            case COMPLETED:
+                this.status = "완료";
+                this.completionTime = formatDateTime(deployment.getUpdatedAt());
+                break;
+            case REJECTED:
+                this.status = "반려";
+                this.completionTime = formatDateTime(deployment.getUpdatedAt());
+                break;
+            case CANCELED:
+                this.status = "취소";
+                this.completionTime = formatDateTime(deployment.getUpdatedAt());
+                break;
+            default:
+                this.status = deploymentStatus.getKoreanName();
+                this.completionTime = null;
+        }
+    }
+
     private String getDeploymentStageKorean(DeploymentStage stage) {
         if (stage == null) {
             return null;
@@ -76,70 +201,14 @@ public class TaskManagementResponseDto {
         }
     }
 
-    /**
-     * ✅ 수정: DeploymentStatus를 한글로 변환
-     */
-    private String getDeploymentStatusKorean(DeploymentStatus status) {
-        if (status == null) {
-            return null;
-        }
-
-        switch (status) {
-            case PENDING:
-                return "대기";
-            case APPROVED:
-                return "승인";
-            case IN_PROGRESS:
-                return "진행중";
-            case COMPLETED:
-                return "완료";
-            case REJECTED:
-                return "반려";
-            case CANCELED:
-                return "취소";
-            default:
-                return status.getKoreanName();
-        }
-    }
-
-    /**
-     * ✅ 수정: Deployment 완료 시각 포맷팅
-     * - APPROVED 상태일 때: 승인 완료 시각 표시 (updatedAt)
-     * - COMPLETED 상태일 때: 배포 완료 시각 표시 (updatedAt)
-     * - REJECTED, CANCELED 상태일 때: 처리 시각 표시 (updatedAt)
-     */
-    private String formatDeploymentCompletionTime(Deployment deployment) {
-        LocalDateTime completionTime = null;
-
-        // 계획서 승인 완료
-        if (deployment.getStatus() == DeploymentStatus.APPROVED) {
-            completionTime = deployment.getUpdatedAt();
-        }
-        // 배포 완료
-        else if (deployment.getStatus() == DeploymentStatus.COMPLETED) {
-            completionTime = deployment.getUpdatedAt();
-        }
-        // 반려 또는 취소
-        else if (deployment.getStatus() == DeploymentStatus.REJECTED ||
-                deployment.getStatus() == DeploymentStatus.CANCELED) {
-            completionTime = deployment.getUpdatedAt();
-        }
-
-        if (completionTime != null) {
-            return completionTime.format(DATETIME_FORMATTER);
-        }
-
-        return null;
-    }
-
-    /**
-     * 배포 결과 결정 (성공/실패/null)
-     * - COMPLETED 상태이고 isDeployed 값이 있는 경우에만 반환
-     */
     private String getDeploymentResult(Deployment deployment) {
         if (deployment.getStatus() == DeploymentStatus.COMPLETED && deployment.getIsDeployed() != null) {
             return deployment.getIsDeployed() ? "성공" : "실패";
         }
         return null;
+    }
+
+    private String formatDateTime(LocalDateTime dateTime) {
+        return dateTime != null ? dateTime.format(DATETIME_FORMATTER) : null;
     }
 }

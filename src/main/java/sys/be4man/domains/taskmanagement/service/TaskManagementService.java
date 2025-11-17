@@ -1,8 +1,10 @@
 package sys.be4man.domains.taskmanagement.service;
 
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -10,7 +12,6 @@ import org.springframework.transaction.annotation.Transactional;
 import sys.be4man.domains.analysis.model.entity.BuildRun;
 import sys.be4man.domains.analysis.repository.BuildRunRepository;
 import sys.be4man.domains.approval.model.entity.Approval;
-import sys.be4man.domains.approval.model.type.ApprovalLineType;
 import sys.be4man.domains.approval.model.type.ApprovalType;
 import sys.be4man.domains.approval.repository.ApprovalRepository;
 import sys.be4man.domains.deployment.model.entity.Deployment;
@@ -21,7 +22,6 @@ import sys.be4man.domains.taskmanagement.repository.TaskManagementRepository;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -36,38 +36,57 @@ public class TaskManagementService {
     private final BuildRunRepository buildRunRepository;
     private final TaskDetailTimelineService taskDetailTimelineService;
     private final TaskDetailReportService taskDetailReportService;
+    private final TaskDetailInfoService taskDetailInfoService;
+    private final TaskDetailApprovalService taskDetailApprovalService;
 
     private static final DateTimeFormatter DATETIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy.MM.dd HH:mm");
 
-    /**
-     * 작업 관리 목록 조회 - Deployment만 조회
-     */
-    public Page<TaskManagementResponseDto> getTaskList(
-            TaskManagementSearchDto searchDto,
-            int page,
-            int size
-    ) {
+    public Page<TaskManagementResponseDto> getTaskList(TaskManagementSearchDto searchDto, int page, int size) {
         log.debug("작업 관리 목록 조회 - searchDto: {}, page: {}, size: {}", searchDto, page, size);
 
         if (searchDto == null) {
-            searchDto = TaskManagementSearchDto.builder()
-                    .sortBy("최신순")
-                    .build();
+            searchDto = TaskManagementSearchDto.builder().sortBy("최신순").build();
         }
 
         Pageable pageable = PageRequest.of(page, size);
-
-        Page<Deployment> deployments = taskManagementRepository
-                .findTasksBySearchConditions(searchDto, pageable);
+        Page<Deployment> deployments = taskManagementRepository.findTasksBySearchConditions(searchDto, pageable);
 
         log.debug("조회된 Deployment 수: {}", deployments.getTotalElements());
 
-        return deployments.map(TaskManagementResponseDto::new);
+        // ✅ Deployment를 DTO로 변환하면서 필터링
+        List<TaskManagementResponseDto> filteredList = deployments.getContent().stream()
+                .filter(deployment -> {
+                    // ✅ 배포/롤백/재배포가 PENDING 상태면 제외
+                    if ((deployment.getStage() == DeploymentStage.DEPLOYMENT ||
+                            deployment.getStage() == DeploymentStage.ROLLBACK ||
+                            deployment.getStage() == DeploymentStage.RETRY) &&
+                            deployment.getStatus() == DeploymentStatus.PENDING) {
+                        log.debug("⏭️ PENDING 상태의 배포/롤백/재배포 제외 - id: {}, stage: {}, status: {}",
+                                deployment.getId(), deployment.getStage(), deployment.getStatus());
+                        return false;  // ✅ 제외
+                    }
+                    return true;  // ✅ 포함
+                })
+                .map(deployment -> {
+                    // ✅ PLAN Approval 조회
+                    List<Approval> planApprovals = approvalRepository.findByDeploymentIdAndTypeAndIsDeletedFalse(
+                            deployment.getId(), ApprovalType.PLAN);
+
+                    // ✅ REPORT 단계면 REPORT Approval도 조회
+                    List<Approval> reportApprovals = null;
+                    if (deployment.getStage() == DeploymentStage.REPORT) {
+                        reportApprovals = approvalRepository.findByDeploymentIdAndTypeAndIsDeletedFalse(
+                                deployment.getId(), ApprovalType.REPORT);
+                    }
+
+                    return new TaskManagementResponseDto(deployment, planApprovals, reportApprovals);
+                })
+                .collect(Collectors.toList());
+
+        // ✅ PageImpl로 Page 객체 생성
+        return new PageImpl<>(filteredList, pageable, deployments.getTotalElements());
     }
 
-    /**
-     * 특정 작업 상세 조회 (기본)
-     */
     public TaskManagementResponseDto getTaskDetail(Long taskId) {
         log.debug("작업 상세 조회 - taskId: {}", taskId);
 
@@ -85,13 +104,9 @@ public class TaskManagementService {
         return new TaskManagementResponseDto(deployment);
     }
 
-    /**
-     * 작업 전체 상세 조회
-     */
     public TaskDetailResponseDto getTaskDetailFull(Long deploymentId) {
         log.debug("작업 전체 상세 조회 - deploymentId: {}", deploymentId);
 
-        // 1. Deployment 조회
         Deployment deployment = taskManagementRepository.findById(deploymentId)
                 .orElseThrow(() -> new IllegalArgumentException("작업을 찾을 수 없습니다. ID: " + deploymentId));
 
@@ -102,247 +117,215 @@ public class TaskManagementService {
         log.debug("Deployment 조회 완료 - deploymentId: {}, stage: {}, status: {}",
                 deployment.getId(), deployment.getStage(), deployment.getStatus());
 
-        // ✅ 2. 계획서와 배포 연결 (pull_request_id 기준)
         Deployment planDeployment = deployment;
         Deployment deploymentTask = null;
+        Deployment reportDeployment = null;
 
         Long pullRequestId = deployment.getPullRequest() != null ? deployment.getPullRequest().getId() : null;
 
-        if (pullRequestId == null) {
-            log.warn("PullRequest가 없는 Deployment - deploymentId: {}", deploymentId);
-        } else {
-            if (deployment.getStage() == DeploymentStage.PLAN) {
-                // 계획서 조회 시 → 같은 PR의 배포 작업 찾기
-                planDeployment = deployment;
+        // ✅ 같은 PR의 모든 deployment 조회
+        DeploymentStage maxStage = deployment.getStage();  // 가장 진행된 단계
 
-                deploymentTask = taskManagementRepository.findAll().stream()
-                        .filter(d -> !d.getIsDeleted())
-                        .filter(d -> d.getStage() == DeploymentStage.DEPLOYMENT ||
-                                   d.getStage() == DeploymentStage.RETRY ||
-                                   d.getStage() == DeploymentStage.ROLLBACK)
-                        .filter(d -> d.getPullRequest() != null && d.getPullRequest().getId().equals(pullRequestId))
-                        .min((d1, d2) -> d1.getCreatedAt().compareTo(d2.getCreatedAt()))
-                        .orElse(null);
+        if (pullRequestId != null) {
+            // ✅ 같은 PR의 모든 deployment 조회하여 가장 진행된 단계 확인
+            List<Deployment> relatedDeployments = taskManagementRepository.findAll().stream()
+                    .filter(d -> !d.getIsDeleted())
+                    .filter(d -> d.getPullRequest() != null && d.getPullRequest().getId().equals(pullRequestId))
+                    .collect(Collectors.toList());
 
-                if (deploymentTask != null) {
-                    log.debug("✅ 계획서 → 배포 작업 찾기 완료 - planId: {}, deploymentId: {}, pullRequestId: {}",
-                            planDeployment.getId(), deploymentTask.getId(), pullRequestId);
+            log.debug("같은 PR의 deployment 개수: {}", relatedDeployments.size());
+
+            // 가장 진행된 단계 찾기
+            for (Deployment d : relatedDeployments) {
+                if (getStageOrder(d.getStage()) > getStageOrder(maxStage)) {
+                    maxStage = d.getStage();
                 }
-
-            } else if (deployment.getStage() == DeploymentStage.DEPLOYMENT ||
-                       deployment.getStage() == DeploymentStage.RETRY ||
-                       deployment.getStage() == DeploymentStage.ROLLBACK) {
-                // 배포 조회 시 → 같은 PR의 계획서 찾기
-                deploymentTask = deployment;
-
-                planDeployment = taskManagementRepository.findAll().stream()
-                        .filter(d -> !d.getIsDeleted())
-                        .filter(d -> d.getStage() == DeploymentStage.PLAN)
-                        .filter(d -> d.getPullRequest() != null && d.getPullRequest().getId().equals(pullRequestId))
-                        .max((d1, d2) -> d1.getCreatedAt().compareTo(d2.getCreatedAt()))
-                        .orElse(deployment);
-
-                log.debug("✅ 배포 → 계획서 찾기 완료 - deploymentId: {}, planId: {}, pullRequestId: {}",
-                        deploymentTask.getId(), planDeployment.getId(), pullRequestId);
             }
+
+            log.debug("가장 진행된 단계: {}", maxStage);
+
+            // 계획서 찾기
+            planDeployment = relatedDeployments.stream()
+                    .filter(d -> d.getStage() == DeploymentStage.PLAN)
+                    .max((d1, d2) -> d1.getCreatedAt().compareTo(d2.getCreatedAt()))
+                    .orElse(deployment);
+
+            // 배포 작업 찾기
+            deploymentTask = relatedDeployments.stream()
+                    .filter(d -> d.getStage() == DeploymentStage.DEPLOYMENT ||
+                            d.getStage() == DeploymentStage.RETRY ||
+                            d.getStage() == DeploymentStage.ROLLBACK)
+                    .min((d1, d2) -> d1.getCreatedAt().compareTo(d2.getCreatedAt()))
+                    .orElse(null);
+
+            // 결과보고 찾기
+            reportDeployment = relatedDeployments.stream()
+                    .filter(d -> d.getStage() == DeploymentStage.REPORT)
+                    .max((d1, d2) -> d1.getCreatedAt().compareTo(d2.getCreatedAt()))
+                    .orElse(null);
+
+            log.debug("✅ PR 기반 조회 완료 - planId: {}, deploymentId: {}, reportId: {}",
+                    planDeployment.getId(),
+                    deploymentTask != null ? deploymentTask.getId() : "없음",
+                    reportDeployment != null ? reportDeployment.getId() : "없음");
         }
 
-        // 3. Approval 조회 (항상 계획서 기준)
-        List<Approval> planApprovals = approvalRepository
-                .findByDeploymentIdAndTypeOrderByIdAsc(planDeployment.getId(), ApprovalType.PLAN);
+        // ✅ Approval 조회
+        List<Approval> planApprovals = approvalRepository.findByDeploymentIdAndTypeAndIsDeletedFalse(
+                planDeployment.getId(), ApprovalType.PLAN);
 
-        // 결과보고는 원본 deployment 기준
-        List<Approval> reportApprovals = approvalRepository
-                .findByDeploymentIdAndTypeOrderByIdAsc(deployment.getId(), ApprovalType.REPORT);
+        List<Approval> reportApprovals = reportDeployment != null ?
+                approvalRepository.findByDeploymentIdAndTypeAndIsDeletedFalse(
+                        reportDeployment.getId(), ApprovalType.REPORT) :
+                List.of();
 
-        log.debug("Approval 조회 완료 - planDeploymentId: {}, planApprovals: {}, reportApprovals: {}",
-                planDeployment.getId(), planApprovals.size(), reportApprovals.size());
+        log.debug("Approval 조회 - planApprovals: {}, reportApprovals: {}",
+                planApprovals.size(), reportApprovals.size());
 
-        // 4. BuildRun 조회 (배포 작업이 있으면 그것 기준, 없으면 현재 deployment)
         Long buildRunDeploymentId = deploymentTask != null ? deploymentTask.getId() : deployment.getId();
-        Optional<BuildRun> buildRunOpt = buildRunRepository
-                .findByDeploymentIdAndIsDeletedFalse(buildRunDeploymentId);
+        Optional<BuildRun> buildRunOpt = buildRunRepository.findByDeploymentIdAndIsDeletedFalse(buildRunDeploymentId);
 
         log.debug("BuildRun 조회 - deploymentId: {}, found: {}", buildRunDeploymentId, buildRunOpt.isPresent());
 
-        // 5. 각 DTO 생성 (배포 작업 정보 우선 사용)
-        Deployment displayDeployment = deploymentTask != null ? deploymentTask : deployment;
+        // ✅ 타임라인용 Deployment는 가장 진행된 것 사용
+        Deployment timelineDeployment = reportDeployment != null ? reportDeployment :
+                (deploymentTask != null ? deploymentTask : deployment);
+
+        log.debug("타임라인용 Deployment - id: {}, stage: {}",
+                timelineDeployment.getId(), timelineDeployment.getStage());
 
         List<TimelineStepDto> timeline = taskDetailTimelineService.buildTimeline(
-                displayDeployment, planApprovals, reportApprovals, buildRunOpt.orElse(null));
+                timelineDeployment, planApprovals, reportApprovals, buildRunOpt.orElse(null));
 
-        ApprovalInfoDto planApprovalInfo = buildApprovalInfo(planApprovals, DeploymentStage.PLAN);
-        ApprovalInfoDto reportApprovalInfo = buildApprovalInfo(reportApprovals, DeploymentStage.REPORT);
         JenkinsLogDto jenkinsLog = buildRunOpt.map(this::buildJenkinsLog).orElse(null);
-        PlanContentDto planContent = buildPlanContent(planDeployment, planApprovals, buildRunOpt.orElse(null));
-        ReportContentDto reportContent = taskDetailReportService.buildReportContent(
-                deployment, buildRunOpt.orElse(null), reportApprovals);
 
-        // 6. currentStage 결정 (배포 작업 상태 우선)
+        PlanContentDto planContent = taskDetailInfoService.buildPlanContent(
+                planDeployment, planApprovals, buildRunOpt.orElse(null));
+
+        ApprovalInfoDto planApprovalInfo = taskDetailApprovalService.buildApprovalInfo(
+                planApprovals, DeploymentStage.PLAN);
+
+        ApprovalInfoDto reportApprovalInfo = reportDeployment != null ?
+                taskDetailApprovalService.buildApprovalInfo(reportApprovals, DeploymentStage.REPORT) :
+                null;
+
+        Deployment reportTargetDeployment = reportDeployment != null ? reportDeployment : deployment;
+        ReportContentDto reportContent = reportDeployment != null ?
+                taskDetailReportService.buildReportContent(reportTargetDeployment, buildRunOpt.orElse(null), reportApprovals) :
+                null;
+
+        // ✅ initialTab 결정도 timelineDeployment 기준으로
         String currentStage;
         String currentStatus;
         String initialTab = "plan";
 
-        if (!reportApprovals.isEmpty()) {
+        if (timelineDeployment.getStage() == DeploymentStage.REPORT) {
             currentStage = "결과보고";
-            Approval reportApproval = reportApprovals.get(0);
-            currentStatus = getApprovalStatusKorean(reportApproval.getStatus());
-            initialTab = "report";
-        } else if (deploymentTask != null) {
-            // ✅ 배포 작업이 있으면 배포 상태 표시
-            if (deploymentTask.getStatus() == DeploymentStatus.IN_PROGRESS) {
+            if (timelineDeployment.getStatus() == DeploymentStatus.PENDING) {
+                currentStatus = "승인대기";
+                initialTab = "report";
+            } else if (timelineDeployment.getStatus() == DeploymentStatus.COMPLETED) {
+                currentStatus = "승인완료";
+                initialTab = "report";
+            } else if (timelineDeployment.getStatus() == DeploymentStatus.REJECTED) {
+                currentStatus = "반려";
+                initialTab = "report";
+            } else {
+                currentStatus = timelineDeployment.getStatus().getKoreanName();
+                initialTab = "report";
+            }
+        } else if (timelineDeployment.getStage() == DeploymentStage.DEPLOYMENT ||
+                timelineDeployment.getStage() == DeploymentStage.RETRY ||
+                timelineDeployment.getStage() == DeploymentStage.ROLLBACK) {
+
+            if (timelineDeployment.getStage() == DeploymentStage.ROLLBACK) {
+                currentStage = "복구";
+            } else if (timelineDeployment.getStage() == DeploymentStage.RETRY) {
+                currentStage = "재배포";
+            } else {
                 currentStage = "배포";
+            }
+
+            if (timelineDeployment.getStatus() == DeploymentStatus.IN_PROGRESS) {
                 currentStatus = "진행중";
                 initialTab = "jenkins";
-            } else if (deploymentTask.getStatus() == DeploymentStatus.COMPLETED) {
-                currentStage = "배포";
-                currentStatus = "완료";
+            } else if (timelineDeployment.getStatus() == DeploymentStatus.COMPLETED) {
+                currentStatus = timelineDeployment.getIsDeployed() ? "성공" : "실패";
                 initialTab = "jenkins";
-            } else {
-                // 배포 대기중
-                currentStage = "계획서";
-                currentStatus = "승인완료";
+            } else if (timelineDeployment.getStatus() == DeploymentStatus.REJECTED) {
+                currentStatus = "반려";
                 initialTab = "plan";
-            }
-        } else if (deployment.getStage() == DeploymentStage.DEPLOYMENT ||
-                deployment.getStage() == DeploymentStage.RETRY ||
-                deployment.getStage() == DeploymentStage.ROLLBACK) {
-
-            if (deployment.getStatus() == DeploymentStatus.APPROVED) {
-                currentStage = "계획서";
-                currentStatus = "승인완료";
+            } else if (timelineDeployment.getStatus() == DeploymentStatus.PENDING) {
+                currentStatus = "대기";
                 initialTab = "plan";
             } else {
-                currentStage = deployment.getStage().getKoreanName();
-                currentStatus = deployment.getStatus() != null ? deployment.getStatus().getKoreanName() : null;
-                initialTab = "jenkins";
+                currentStatus = timelineDeployment.getStatus().getKoreanName();
+                initialTab = "plan";
             }
-        } else if (deployment.getStatus() == DeploymentStatus.COMPLETED && deployment.getIsDeployed() != null) {
-            currentStage = "배포";
-            currentStatus = "완료";
-            initialTab = "jenkins";
+        } else if (timelineDeployment.getStatus() == DeploymentStatus.APPROVED) {
+            currentStage = "계획서";
+            currentStatus = "승인완료";
+            initialTab = "plan";
+        } else if (timelineDeployment.getStatus() == DeploymentStatus.REJECTED) {
+            currentStage = "계획서";
+            currentStatus = "반려";
+            initialTab = "plan";
+        } else if (timelineDeployment.getStatus() == DeploymentStatus.PENDING) {
+            currentStage = "계획서";
+            currentStatus = "승인대기";
+            initialTab = "plan";
         } else {
-            currentStage = deployment.getStage() != null ? deployment.getStage().getKoreanName() : null;
-            currentStatus = deployment.getStatus() != null ? deployment.getStatus().getKoreanName() : null;
+            currentStage = timelineDeployment.getStage().getKoreanName();
+            currentStatus = timelineDeployment.getStatus().getKoreanName();
             initialTab = "plan";
         }
 
-        // 7. 전체 DTO 조합
+        // 가장 진행된 단계를 전달 (프론트엔드에서 탭 활성화 판단용)
+        String maxStageKorean = getStageKorean(maxStage);
+
         return TaskDetailResponseDto.builder()
                 .taskId(deployment.getId())
                 .serviceName(deployment.getProject() != null ? deployment.getProject().getName() : null)
                 .taskTitle(deployment.getTitle())
                 .currentStage(currentStage)
                 .currentStatus(currentStatus)
+                .maxStage(maxStageKorean)  // ✅ 가장 진행된 단계 추가
                 .initialTab(initialTab)
                 .timeline(timeline)
-                .planApproval(planApprovalInfo)
-                .reportApproval(reportApprovalInfo)
                 .jenkinsLog(jenkinsLog)
                 .planContent(planContent)
+                .planApproval(planApprovalInfo)
+                .reportApproval(reportApprovalInfo)
                 .reportContent(reportContent)
                 .build();
     }
 
-    /**
-     * 계획서 내용 생성
-     */
-    private PlanContentDto buildPlanContent(Deployment deployment, List<Approval> planApprovals,
-            BuildRun buildRun) {
-        String content = deployment.getContent();
-        if (!planApprovals.isEmpty()) {
-            Approval planApproval = planApprovals.get(0);
-            content = planApproval.getContent();
+    // ✅ 단계 순서 반환 (비교용)
+    private int getStageOrder(DeploymentStage stage) {
+        switch (stage) {
+            case PLAN: return 1;
+            case DEPLOYMENT: return 2;
+            case RETRY: return 2;
+            case ROLLBACK: return 2;
+            case REPORT: return 3;
+            default: return 0;
         }
-
-        return PlanContentDto.builder()
-                .drafter(deployment.getIssuer() != null ? deployment.getIssuer().getName() : null)
-                .department(deployment.getIssuer() != null && deployment.getIssuer().getDepartment() != null ?
-                        deployment.getIssuer().getDepartment().getKoreanName() : null)
-                .createdAt(formatDateTime(deployment.getCreatedAt()))
-                .serviceName(deployment.getProject() != null ? deployment.getProject().getName() : null)
-                .taskTitle(deployment.getTitle())
-                .scheduledAt(formatDateTime(deployment.getScheduledAt()))
-                .scheduledToEndedAt(formatDateTime(deployment.getScheduledToEndedAt()))
-                .riskDescription(null)
-                .expectedDuration(deployment.getExpectedDuration())
-                .version(deployment.getVersion())
-                .strategy(null)
-                .content(content)
-                .build();
     }
 
-    /**
-     * 승인 정보 DTO 생성
-     */
-    private ApprovalInfoDto buildApprovalInfo(List<Approval> approvals, DeploymentStage stage) {
-        if (approvals.isEmpty()) {
-            return ApprovalInfoDto.builder()
-                    .approvalId(null)
-                    .approvalStage(stage.getKoreanName())
-                    .totalApprovers(0)
-                    .current_approver_account_id(null)
-                    .approvers(new ArrayList<>())
-                    .build();
+    // ✅ 단계 한글명 반환
+    private String getStageKorean(DeploymentStage stage) {
+        switch (stage) {
+            case PLAN: return "계획서";
+            case DEPLOYMENT: return "배포";
+            case RETRY: return "재배포";
+            case ROLLBACK: return "복구";
+            case REPORT: return "결과보고";
+            default: return stage.getKoreanName();
         }
-
-        Approval approval = approvals.get(0);
-
-        Long currentApproverAccountId = approval.getNextApprover() != null
-                ? approval.getNextApprover().getId()
-                : null;
-
-        List<ApproverDto> approvers = approval.getApprovalLines().stream()
-                .filter(line -> line.getType() != ApprovalLineType.CC)
-                .sorted((a, b) -> a.getId().compareTo(b.getId()))
-                .map(line -> {
-                    String approvalStatus;
-                    LocalDateTime processedAt = null;
-
-                    if (line.getIsApproved() == null) {
-                        approvalStatus = "대기중";
-                    } else if (line.getIsApproved()) {
-                        approvalStatus = "승인";
-                        processedAt = line.getApprovedAt();
-                    } else {
-                        approvalStatus = "반려";
-                        processedAt = line.getApprovedAt();
-                    }
-
-                    return ApproverDto.builder()
-                            .approverId(line.getAccount().getId())
-                            .approverName(line.getAccount().getName())
-                            .approverDepartment(line.getAccount().getDepartment() != null ?
-                                    line.getAccount().getDepartment().getKoreanName() : null)
-                            .current_approver_account_id(line.getAccount().getId())
-                            .approvalStatus(approvalStatus)
-                            .processedAt(formatDateTime(processedAt))
-                            .comment(line.getComment())
-                            .isCurrentTurn(currentApproverAccountId != null &&
-                                    currentApproverAccountId.equals(line.getAccount().getId()))
-                            .build();
-                })
-                .toList();
-
-        return ApprovalInfoDto.builder()
-                .approvalId(approval.getId())  // ✅ approvalId 추가!
-                .approvalStage(stage.getKoreanName())
-                .totalApprovers(approvers.size())
-                .current_approver_account_id(currentApproverAccountId)
-                .approvers(approvers)
-                .build();
     }
 
-    /**
-     * Jenkins 로그 DTO 생성
-     */
     private JenkinsLogDto buildJenkinsLog(BuildRun buildRun) {
-        String buildStatus;
-        if (buildRun.getEndedAt() == null) {
-            buildStatus = "IN_PROGRESS";
-        } else {
-            buildStatus = "SUCCESS";
-        }
+        String buildStatus = buildRun.getEndedAt() == null ? "IN_PROGRESS" : "SUCCESS";
 
         return JenkinsLogDto.builder()
                 .jenkinsJobName(buildRun.getJenkinsJobName())
@@ -356,43 +339,17 @@ public class TaskManagementService {
                 .build();
     }
 
-    private String getApprovalStatusKorean(sys.be4man.domains.approval.model.type.ApprovalStatus status) {
-        if (status == null) {
-            return null;
-        }
-        switch (status) {
-            case PENDING:
-                return "승인대기";
-            case APPROVED:
-                return "승인완료";
-            case REJECTED:
-                return "반려";
-            case CANCELED:
-                return "취소";
-            case DRAFT:
-                return "임시저장";
-            default:
-                return status.name();
-        }
-    }
-
     private String formatDateTime(LocalDateTime dateTime) {
         return dateTime != null ? dateTime.format(DATETIME_FORMATTER) : null;
     }
 
     private String formatDuration(Long durationMs) {
-        if (durationMs == null) {
-            return null;
-        }
+        if (durationMs == null) return null;
 
         long seconds = durationMs / 1000;
         long minutes = seconds / 60;
         long remainingSeconds = seconds % 60;
 
-        if (minutes > 0) {
-            return String.format("%d분 %d초", minutes, remainingSeconds);
-        } else {
-            return String.format("%d초", remainingSeconds);
-        }
+        return minutes > 0 ? String.format("%d분 %d초", minutes, remainingSeconds) : String.format("%d초", remainingSeconds);
     }
 }

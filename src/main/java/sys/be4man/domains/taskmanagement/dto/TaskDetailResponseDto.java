@@ -22,6 +22,7 @@ public class TaskDetailResponseDto {
     private String currentStage;            // 현재 단계 (계획서/배포/결과보고)
     private String currentStatus;           // 현재 상태 (승인대기/배포중/완료 등)
     private String initialTab;              // 초기 활성화할 탭
+    private String maxStage;
 
     // 타임라인 정보
     private List<TimelineStepDto> timeline;
