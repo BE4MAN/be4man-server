@@ -106,3 +106,11 @@ gemini:
   api:
     key:
       ${GEMINI_API_KEY}
+
+webhooks:
+  github:
+    secret: ${BE4MAN_WEBHOOK_SECRET}
+
+github:
+  token: ${GITHUB_TOKEN}
+  apiBaseUrl: https://api.github.com

@@ -8,5 +8,6 @@ import sys.be4man.domains.pullrequest.model.entity.PullRequest;
 public interface PullRequestRepository extends JpaRepository<PullRequest, Long> {
     Optional<PullRequest> findByPrNumber(Integer prNumber);
     boolean existsByPrNumber(Integer prNumber);
-    List<PullRequest> findByGithubEmail(String githubEmail);
+    List<PullRequest> findByGithubId(Long githubId);
+    Optional<PullRequest> findByPrNumberAndRepositoryUrl(Integer prNumber, String repositoryUrl);
 }

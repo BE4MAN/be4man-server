@@ -1,17 +1,9 @@
 package sys.be4man.domains.deployment.model.entity;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
+import java.time.Duration;
 import java.time.LocalDateTime;
+
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -65,7 +57,7 @@ public class Deployment extends BaseEntity {
     @Column(name = "is_deployed")
     private Boolean isDeployed;
 
-    @Column(name = "scheduled_at", nullable = false)
+    @Column(name = "scheduled_at", nullable = true)
     private LocalDateTime scheduledAt;
 
     @Column(name = "scheduled_to_ended_at")
@@ -99,27 +91,75 @@ public class Deployment extends BaseEntity {
         this.stage = stage;
     }
 
-    /**
-     * 배포 성공 여부 업데이트
-     */
+    /** 배포 성공 여부 업데이트 */
     public void updateIsDeployed(boolean isDeployed) {
         this.isDeployed = isDeployed;
     }
 
-    /**
-     * 배포 작업 상태 업데이트
-     */
+    /** 배포 작업 상태 업데이트 */
     public void updateStatus(DeploymentStatus status) {
         this.status = status;
     }
 
-    /**
-     * 배포 작업 단계 업데이트
-     */
+    /** 배포 작업 단계 업데이트 */
     public void updateStage(DeploymentStage stage) {
         this.stage = stage;
     }
 
+    /** 제목/본문/버전 단일 업데이트 (선택) */
+    public void updateTitle(String title) {
+        if (title != null) this.title = title;
+    }
+
+    public void updateContent(String content) {
+        if (content != null) this.content = content;
+    }
+
+    public void updateVersion(String version) {
+        this.version = version;
+    }
+
+    /**
+     * 스케줄 전체 업데이트: 시작/종료 시각을 세팅하고 두 시각 차이를 분(String)으로 저장
+     * - end 가 start 이전이면 end = start 로 보정(소요 시간 0분)
+     * - start 또는 end 가 null이면 가능한 값만 저장, expectedDuration 은 null 처리
+     */
+    public void updateSchedule(LocalDateTime start, LocalDateTime end) {
+        this.scheduledAt = start;
+        this.scheduledTo_EndedAtSafe(end);
+        recomputeExpectedDuration();
+    }
+
+    /** 시작 시각만 수정 */
+    public void updateScheduledAt(LocalDateTime start) {
+        this.scheduledAt = start;
+        recomputeExpectedDuration();
+    }
+
+    /** 종료 시각만 수정 */
+    public void updateScheduledToEndedAt(LocalDateTime end) {
+        this.scheduledTo_EndedAtSafe(end);
+        recomputeExpectedDuration();
+    }
+
+    private void scheduledTo_EndedAtSafe(LocalDateTime end) {
+        // 보정만 담당
+        if (end != null && scheduledAt != null && end.isBefore(scheduledAt)) {
+            // end가 start보다 이르면 0분 처리 위해 start와 동일하게 맞춤
+            this.scheduledToEndedAt = scheduledAt;
+        } else {
+            this.scheduledToEndedAt = end;
+        }
+    }
+
+    /** start/end가 모두 존재할 때만 분 차이를 계산하여 expectedDuration에 문자열로 저장 */
+    private void recomputeExpectedDuration() {
+        if (this.scheduledAt != null && this.scheduledToEndedAt != null) {
+            long minutes = Duration.between(this.scheduledAt, this.scheduledToEndedAt).toMinutes();
+            if (minutes < 0) minutes = 0;
+            this.expectedDuration = String.valueOf(minutes);
+        } else {
+            this.expectedDuration = null;
+        }
+    }
 }
-
-

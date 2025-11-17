@@ -9,4 +9,5 @@ public class PullRequestUpdateRequest {
 
     private String repositoryUrl;
     private String branch;
+    private Long githubId;
 }

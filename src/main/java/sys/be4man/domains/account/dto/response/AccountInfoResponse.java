@@ -15,7 +15,8 @@ public record AccountInfoResponse(
         String profileImageUrl,
         Role role,
         JobPosition position,
-        JobDepartment department
+        JobDepartment department,
+        Long githubId
 ) {
 
     /**
@@ -29,7 +30,8 @@ public record AccountInfoResponse(
                 account.getProfileImageUrl(),
                 account.getRole(),
                 account.getPosition(),
-                account.getDepartment()
+                account.getDepartment(),
+                account.getGithubId()
         );
     }
 }
