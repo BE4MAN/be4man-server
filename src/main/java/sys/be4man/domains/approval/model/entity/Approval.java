@@ -104,6 +104,14 @@ public class Approval extends BaseEntity {
         this.nextApprover = null;
     }
 
+    /** 최종 승인 처리 (마지막 승인자의 시각 사용) */
+    public void approve(LocalDateTime lastApprovedAt) {
+        this.isApproved = true;
+        this.status = ApprovalStatus.APPROVED;
+        this.approvedAt = lastApprovedAt != null ? lastApprovedAt : LocalDateTime.now();
+        this.nextApprover = null;
+    }
+
     /** 반려 처리 */
     public void reject() {
         this.isApproved = false;

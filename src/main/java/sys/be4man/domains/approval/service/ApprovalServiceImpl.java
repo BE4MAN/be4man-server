@@ -4,6 +4,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import sys.be4man.domains.account.model.entity.Account;
@@ -16,6 +17,7 @@ import sys.be4man.domains.approval.model.entity.Approval;
 import sys.be4man.domains.approval.model.entity.ApprovalLine;
 import sys.be4man.domains.approval.model.type.ApprovalLineType;
 import sys.be4man.domains.approval.model.type.ApprovalStatus;
+import sys.be4man.domains.approval.model.type.ApprovalType;
 import sys.be4man.domains.approval.repository.ApprovalLineRepository;
 import sys.be4man.domains.approval.repository.ApprovalRepository;
 import sys.be4man.domains.deployment.dto.request.DeploymentCreateRequest;
@@ -30,6 +32,7 @@ import sys.be4man.domains.project.model.entity.RelatedProject;
 import sys.be4man.domains.project.repository.ProjectRepository;
 import sys.be4man.domains.project.repository.RelatedProjectRepository;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional
@@ -101,21 +104,110 @@ public class ApprovalServiceImpl implements ApprovalService {
         line.approve();
         approvalLineRepository.save(line);
 
-        Account next = findNextApproverAfter(approval, approver);
+        // ✅ 수정: 정렬된 리스트로 다음 승인자 찾기
+        List<ApprovalLine> approverLines = approval.getApprovalLines().stream()
+                .filter(l -> l.getType() == ApprovalLineType.APPROVE || l.getType() == ApprovalLineType.CONSENT)
+                .sorted(Comparator.comparing(ApprovalLine::getId))
+                .toList();
+
+        Account next = findNextApproverAfter(approverLines, approver);
+
+        log.debug("승인 처리 - approvalId: {}, currentApprover: {}, nextApprover: {}",
+                approvalId, approver.getName(), next != null ? next.getName() : "없음");
+
         if (next != null) {
             approval.updateNextApprover(next);
             approval.updateStatus(ApprovalStatus.PENDING);
+            log.info("다음 승인자로 이동 - approvalId: {}, nextApprover: {}", approvalId, next.getName());
         } else {
-            approval.approve();
+            // ✅ 마지막 승인자 → 승인 완료 처리
+            java.time.LocalDateTime lastApprovedAt = approval.getApprovalLines().stream()
+                    .filter(l -> l.getType() != ApprovalLineType.CC)
+                    .filter(l -> Boolean.TRUE.equals(l.getIsApproved()))
+                    .map(ApprovalLine::getApprovedAt)
+                    .max(java.time.LocalDateTime::compareTo)
+                    .orElse(java.time.LocalDateTime.now());
+
+            approval.approve(lastApprovedAt);
+            log.info("승인 완료 - approvalId: {}, type: {}", approvalId, approval.getType());
+
+            Deployment deployment = approval.getDeployment();
+            if (deployment != null) {
+                if (approval.getType() == ApprovalType.PLAN) {
+                    deployment.updateStatus(DeploymentStatus.APPROVED);
+                    deployment.updateStage(DeploymentStage.DEPLOYMENT);
+                    deploymentRepository.save(deployment);
+
+                    log.info("✅ 계획서 승인 완료 - Deployment 업데이트: deploymentId={}, status=APPROVED, stage=DEPLOYMENT",
+                            deployment.getId());
+
+                } else if (approval.getType() == ApprovalType.REPORT) {
+                    deployment.updateStatus(DeploymentStatus.COMPLETED);
+                    deploymentRepository.save(deployment);
+
+                    log.info("✅ 결과보고 승인 완료 - Deployment 업데이트: deploymentId={}, status=COMPLETED",
+                            deployment.getId());
+                }
+            }
         }
+    }
+
+    // ✅ 수정: List를 파라미터로 받도록 변경
+    private Account findNextApproverAfter(List<ApprovalLine> approverLines, Account currentApprover) {
+        boolean foundCurrent = false;
+        for (ApprovalLine line : approverLines) {
+            if (!foundCurrent) {
+                if (line.getAccount().getId().equals(currentApprover.getId())) {
+                    foundCurrent = true;
+                }
+                continue;
+            }
+            return line.getAccount();
+        }
+        return null;
     }
 
     @Override
     public void reject(Long approvalId, ApprovalDecisionRequest request) {
         Approval approval = getApprovalOrThrow(approvalId);
-        ApprovalLine line = updateOrCreateLineComment(approval, request, false);
+
+        // ✅ 승인 권한 확인
+        Account rejector = accountRepository.findById(request.getApproverAccountId())
+                .orElseThrow(() -> new IllegalArgumentException("Account not found. id=" + request.getApproverAccountId()));
+
+        ApprovalLine line = approval.getApprovalLines().stream()
+                .filter(l -> l.getAccount().getId().equals(rejector.getId()))
+                .filter(l -> l.getType() == ApprovalLineType.APPROVE || l.getType() == ApprovalLineType.CONSENT)
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "승인 권한이 없습니다. approvalId=" + approvalId + ", accountId=" + rejector.getId()));
+
+        // ✅ 이미 승인했던 경우 승인 취소 로그
+        if (Boolean.TRUE.equals(line.getIsApproved())) {
+            log.info("승인 취소 후 반려 - approvalId: {}, accountId: {}, accountName: {}",
+                    approvalId, rejector.getId(), rejector.getName());
+        }
+
+        // ✅ 반려 처리 (승인 여부와 관계없이)
         line.reject();
+        line.updateComment(request.getComment() != null ? request.getComment() : "");
+        approvalLineRepository.save(line);
+
+        // ✅ Approval 전체를 REJECTED로 변경
         approval.reject();
+
+        log.info("반려 처리 완료 - approvalId: {}, type: {}, rejector: {}",
+                approvalId, approval.getType(), rejector.getName());
+
+        // ✅ Deployment 상태 업데이트
+        Deployment deployment = approval.getDeployment();
+        if (deployment != null) {
+            deployment.updateStatus(DeploymentStatus.REJECTED);
+            deploymentRepository.save(deployment);
+
+            log.info("✅ 반려 처리 - Deployment 업데이트: deploymentId={}, status=REJECTED",
+                    deployment.getId());
+        }
     }
 
     @Override
@@ -133,6 +225,18 @@ public class ApprovalServiceImpl implements ApprovalService {
 
         approval.addApprovalLine(line);
         approval.updateStatus(ApprovalStatus.CANCELED);
+
+        log.info("취소 처리 - approvalId: {}, type: {}", approvalId, approval.getType());
+
+        // ✅ Deployment 상태 업데이트
+        Deployment deployment = approval.getDeployment();
+        if (deployment != null) {
+            deployment.updateStatus(DeploymentStatus.CANCELED);
+            deploymentRepository.save(deployment);
+
+            log.info("✅ 취소 처리 - Deployment 업데이트: deploymentId={}, status=CANCELED",
+                    deployment.getId());
+        }
     }
 
     private Approval getApprovalOrThrow(Long id) {
@@ -375,13 +479,5 @@ public class ApprovalServiceImpl implements ApprovalService {
 
             relatedProjectRepository.save(link);
         }
-    }
-
-    private ApprovalLine findLastDecisionLine(Approval approval) {
-        return approval.getApprovalLines().stream()
-                .filter(line -> line.getType() == ApprovalLineType.APPROVE || line.getType() == ApprovalLineType.CONSENT)
-                .max(Comparator.comparing(line ->
-                        line.getApprovedAt() != null ? line.getApprovedAt() : line.getApproval().getCreatedAt()))
-                .orElse(null);
     }
 }

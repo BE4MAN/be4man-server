@@ -26,4 +26,5 @@ public class PlanContentDto {
     private String strategy;                // 배포 전략
     private String content;                 // 계획서 상세 내용 (deployment.content)
     private String pullRequestUrl;          // PR URL
+    private String planStatus;              // "대기", "승인", "반려"
 }

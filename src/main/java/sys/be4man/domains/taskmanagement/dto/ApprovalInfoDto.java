@@ -15,6 +15,8 @@ import java.util.List;
 @Builder
 public class ApprovalInfoDto {
 
+
+    private Long approvalId;
     private String approvalStage;           // 승인 단계 (계획서/결과보고)
     private Integer totalApprovers;         // 총 승인자 수
     private Long current_approver_account_id;   // 현재 차례 승인자 순서 (null이면 모두 완료)

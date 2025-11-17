@@ -36,18 +36,26 @@ public class TaskManagementRepositoryImpl implements TaskManagementRepositoryCus
             TaskManagementSearchDto searchDto,
             Pageable pageable
     ) {
-        // 동적 쿼리 조건 생성
         BooleanBuilder builder = new BooleanBuilder();
 
         // 1. 삭제되지 않은 데이터만 조회
         builder.and(deployment.isDeleted.isFalse());
 
-        // 2. 검색어 조건 (작업번호, 기안자, 서비스명, 작업제목)
+        // ✅ 2. 배포 대기 상태 제외 (stage=DEPLOYMENT이지만 아직 시작 안함)
+        builder.and(
+                deployment.stage.eq(DeploymentStage.DEPLOYMENT)
+                        .and(deployment.status.in(
+                                DeploymentStatus.PENDING,
+                                DeploymentStatus.APPROVED
+                        ))
+                        .not()
+        );
+
+        // 3. 검색어 조건
         if (searchDto.hasSearchQuery()) {
             String query = searchDto.getSearchQuery().toLowerCase();
             BooleanBuilder searchBuilder = new BooleanBuilder();
 
-            // 작업번호로 검색 (숫자인 경우)
             try {
                 Long id = Long.parseLong(query);
                 searchBuilder.or(deployment.id.eq(id));
@@ -55,45 +63,37 @@ public class TaskManagementRepositoryImpl implements TaskManagementRepositoryCus
                 // 숫자가 아니면 무시
             }
 
-            // 기안자 이름으로 검색
             searchBuilder.or(deployment.issuer.name.containsIgnoreCase(query));
-
-            // 서비스명으로 검색
             searchBuilder.or(deployment.project.name.containsIgnoreCase(query));
-
-            // 작업 제목으로 검색
             searchBuilder.or(deployment.title.containsIgnoreCase(query));
 
             builder.and(searchBuilder);
         }
 
-        // 3. 처리 단계 필터 (계획서/배포/결과보고)
+        // 4. 처리 단계 필터
         if (!searchDto.isStageAll()) {
             builder.and(buildStageCondition(searchDto.getStage()));
         }
 
-        // 4. 처리 상태 필터 (승인대기/종료/진행중/취소/완료)
+        // 5. 처리 상태 필터
         if (!searchDto.isStatusAll()) {
             builder.and(buildStatusCondition(searchDto.getStatus()));
         }
 
-        // 5. 결과 필터 (성공/실패)
+        // 6. 결과 필터
         if (!searchDto.isResultAll()) {
             builder.and(buildResultCondition(searchDto.getResult()));
         }
 
-        // 6. 날짜 범위 필터
+        // 7. 날짜 범위 필터
         if (searchDto.hasDateRange()) {
             LocalDateTime startDateTime = searchDto.getStartDate().atStartOfDay();
             LocalDateTime endDateTime = searchDto.getEndDate().atTime(LocalTime.MAX);
-
             builder.and(deployment.updatedAt.between(startDateTime, endDateTime));
         }
 
-        // 7. 정렬 조건
         OrderSpecifier<?> orderSpecifier = getOrderSpecifier(searchDto.getSortBy());
 
-        // 전체 개수 조회 (count 쿼리는 join 없이 실행)
         Long totalCount = queryFactory
                 .select(deployment.count())
                 .from(deployment)
@@ -102,7 +102,6 @@ public class TaskManagementRepositoryImpl implements TaskManagementRepositoryCus
 
         long total = (totalCount != null) ? totalCount : 0L;
 
-        // 페이징 적용 및 결과 조회 (fetchJoin 사용)
         List<Deployment> content = queryFactory
                 .selectFrom(deployment)
                 .leftJoin(deployment.project, project).fetchJoin()
@@ -118,12 +117,13 @@ public class TaskManagementRepositoryImpl implements TaskManagementRepositoryCus
     }
 
     /**
-     * 처리 단계 조건 생성
+     * ✅ 수정: 처리 단계 조건 생성
      *
      * 작업 내역 표시 규칙:
      * 1. 계획서 단계:
-     *    - PENDING(승인대기)만 표시
-     *    - 반려 시: 작업 관리 내역에 표시 안 함 (모든 승인자)
+     *    - PENDING(승인대기): 승인 대기 중
+     *    - APPROVED(승인완료): 승인 완료
+     *    - REJECTED(반려): 반려
      *
      * 2. 배포 단계:
      *    - IN_PROGRESS(배포중): scheduledAt 시간에 자동 시작
@@ -139,13 +139,16 @@ public class TaskManagementRepositoryImpl implements TaskManagementRepositoryCus
         BooleanBuilder builder = new BooleanBuilder();
 
         if ("계획서".equals(stage)) {
-            // 계획서는 승인대기만 표시
-            builder.and(deployment.stage.eq(DeploymentStage.PLAN))
-                    .and(deployment.status.eq(DeploymentStatus.PENDING));
+            // ✅ 계획서는 PLAN 단계의 모든 상태 표시 (PENDING, APPROVED, REJECTED)
+            builder.and(deployment.stage.eq(DeploymentStage.PLAN));
 
         } else if ("배포".equals(stage)) {
             // 배포는 배포중, 종료, 취소 표시
-            builder.and(deployment.stage.eq(DeploymentStage.DEPLOYMENT))
+            builder.and(deployment.stage.in(
+                            DeploymentStage.DEPLOYMENT,
+                            DeploymentStage.RETRY,
+                            DeploymentStage.ROLLBACK
+                    ))
                     .and(deployment.status.in(
                             DeploymentStatus.IN_PROGRESS,
                             DeploymentStatus.COMPLETED,
@@ -158,7 +161,8 @@ public class TaskManagementRepositoryImpl implements TaskManagementRepositoryCus
                     .and(deployment.status.in(
                             DeploymentStatus.PENDING,
                             DeploymentStatus.REJECTED,
-                            DeploymentStatus.APPROVED
+                            DeploymentStatus.APPROVED,
+                            DeploymentStatus.COMPLETED
                     ));
         }
 
@@ -179,9 +183,9 @@ public class TaskManagementRepositoryImpl implements TaskManagementRepositoryCus
     private BooleanBuilder buildStatusCondition(String status) {
         BooleanBuilder builder = new BooleanBuilder();
 
-        if ("승인대기".equals(status)) {
+        if ("승인대기".equals(status) || "대기".equals(status)) {
             builder.or(deployment.status.eq(DeploymentStatus.PENDING));
-        } else if ("배포중".equals(status)) {
+        } else if ("배포중".equals(status) || "진행중".equals(status)) {
             builder.or(deployment.status.eq(DeploymentStatus.IN_PROGRESS));
         } else if ("취소".equals(status)) {
             builder.or(deployment.status.eq(DeploymentStatus.CANCELED));
@@ -189,7 +193,7 @@ public class TaskManagementRepositoryImpl implements TaskManagementRepositoryCus
             builder.or(deployment.status.eq(DeploymentStatus.COMPLETED));
         } else if ("반려".equals(status)) {
             builder.or(deployment.status.eq(DeploymentStatus.REJECTED));
-        } else if ("완료".equals(status)) {
+        } else if ("완료".equals(status) || "승인".equals(status)) {
             builder.or(deployment.status.eq(DeploymentStatus.APPROVED));
         }
         return builder;
@@ -203,10 +207,10 @@ public class TaskManagementRepositoryImpl implements TaskManagementRepositoryCus
 
         if ("성공".equals(result)) {
             builder.and(deployment.status.eq(DeploymentStatus.COMPLETED))
-                   .and(deployment.isDeployed.eq(true));
+                    .and(deployment.isDeployed.eq(true));
         } else if ("실패".equals(result)) {
             builder.and(deployment.status.eq(DeploymentStatus.COMPLETED))
-                   .and(deployment.isDeployed.eq(false));
+                    .and(deployment.isDeployed.eq(false));
         }
 
         return builder;

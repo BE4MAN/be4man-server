@@ -13,18 +13,11 @@ import sys.be4man.domains.taskmanagement.dto.ApproverDto;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * 작업 상세 - 승인 정보 생성 서비스
- */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class TaskDetailApprovalService {
 
-    /**
-     * 승인 정보 DTO 생성
-     * - Approval 문서와 ApprovalLine (결재선)을 조합하여 생성
-     */
     public ApprovalInfoDto buildApprovalInfo(List<Approval> approvals, DeploymentStage stage) {
         log.debug("승인 정보 생성 - stage: {}, approvals: {}", stage, approvals.size());
 
@@ -37,26 +30,35 @@ public class TaskDetailApprovalService {
                     .build();
         }
 
-        // 첫 번째 Approval 사용 (일반적으로 Deployment당 Stage당 하나의 Approval만 존재)
         Approval approval = approvals.get(0);
 
-        // 현재 차례 승인자 ID 찾기 (nextApprover = 다음 결재자)
-        Long currentApproverAccountId = approval.getNextApprover() != null
-                ? approval.getNextApprover().getId()
-                : null;
+        // ✅ 반려 여부 확인
+        boolean isRejected = approval.getApprovalLines().stream()
+                .filter(line -> line.getType() != ApprovalLineType.CC)
+                .anyMatch(line -> {
+                    Boolean isApproved = line.getIsApproved();
+                    return isApproved != null && !isApproved;
+                });
 
-        // ApprovalLine에서 승인자 목록 생성
+        // ✅ 반려 상태일 경우 current_approver_account_id는 null
+        Long currentApproverAccountId;
+        if (!isRejected && approval.getNextApprover() != null) {
+            currentApproverAccountId = approval.getNextApprover().getId();
+        } else {
+            currentApproverAccountId = null;
+        }
+
         List<ApproverDto> approvers = approval.getApprovalLines().stream()
-                .filter(line -> line.getType() != ApprovalLineType.CC)  // 참조 제외
-                .sorted((a, b) -> a.getId().compareTo(b.getId()))  // ID 순서대로 정렬
+                .filter(line -> line.getType() != ApprovalLineType.CC)
+                .sorted((a, b) -> a.getId().compareTo(b.getId()))
                 .map(line -> ApproverDto.builder()
                         .approverId(line.getAccount().getId())
                         .approverName(line.getAccount().getName())
                         .approverDepartment(line.getAccount().getDepartment() != null ?
                                 line.getAccount().getDepartment().getKoreanName() : null)
-                        .current_approver_account_id(line.getAccount().getId())  // 실제 account_id
+                        .current_approver_account_id(line.getAccount().getId())
                         .approvalStatus(getApprovalLineStatus(line))
-                        .processedAt(null)  // ApprovalLine에는 처리 시각 없음
+                        .processedAt(null)
                         .comment(line.getComment())
                         .isCurrentTurn(currentApproverAccountId != null &&
                                 currentApproverAccountId.equals(line.getAccount().getId()))
@@ -71,9 +73,6 @@ public class TaskDetailApprovalService {
                 .build();
     }
 
-    /**
-     * ApprovalLine 상태 문자열 반환
-     */
     private String getApprovalLineStatus(ApprovalLine line) {
         Boolean isApproved = line.getIsApproved();
         if (isApproved == null) {

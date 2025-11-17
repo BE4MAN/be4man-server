@@ -4,12 +4,13 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import sys.be4man.domains.analysis.model.entity.BuildRun;
+import sys.be4man.domains.approval.model.entity.Approval;
 import sys.be4man.domains.deployment.model.entity.Deployment;
-import sys.be4man.domains.deployment.model.type.DeploymentStage;
 import sys.be4man.domains.taskmanagement.dto.ReportContentDto;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 
 /**
  * 작업 상세 - 결과보고 생성 서비스
@@ -23,11 +24,18 @@ public class TaskDetailReportService {
 
     /**
      * 결과보고 내용 DTO 생성
+     *
+     * @param deployment Deployment 엔티티
+     * @param buildRun BuildRun 엔티티 (배포 실행 정보)
+     * @param reportApprovals 결과보고 Approval 리스트
+     * @return 결과보고 내용 DTO
      */
-    public ReportContentDto buildReportContent(Deployment deployment, BuildRun buildRun) {
-        log.debug("결과보고 내용 생성 - deploymentId: {}", deployment.getId());
+    public ReportContentDto buildReportContent(Deployment deployment, BuildRun buildRun, List<Approval> reportApprovals) {
+        log.debug("결과보고 내용 생성 - deploymentId: {}, hasReportApproval: {}",
+                deployment.getId(), !reportApprovals.isEmpty());
 
-        if (deployment.getStage() != DeploymentStage.REPORT) {
+        // ✅ reportApprovals가 없으면 null 반환
+        if (reportApprovals.isEmpty()) {
             return null;
         }
 
@@ -36,13 +44,18 @@ public class TaskDetailReportService {
             deploymentResult = deployment.getIsDeployed() ? "성공" : "실패";
         }
 
+        // ✅ 결과보고서 내용은 Approval의 content에서 가져옴
+        Approval reportApproval = reportApprovals.get(0);
+        String reportContent = reportApproval.getContent();
+        LocalDateTime reportCreatedAt = reportApproval.getCreatedAt();
+
         return ReportContentDto.builder()
                 .deploymentResult(deploymentResult)
                 .actualStartedAt(buildRun != null ? formatDateTime(buildRun.getStartedAt()) : null)
                 .actualEndedAt(buildRun != null ? formatDateTime(buildRun.getEndedAt()) : null)
                 .actualDuration(buildRun != null ? formatDuration(buildRun.getDuration()) : null)
-                .reportContent(deployment.getContent())
-                .reportCreatedAt(formatDateTime(deployment.getUpdatedAt()))
+                .reportContent(reportContent)  // ✅ Approval의 content 사용
+                .reportCreatedAt(formatDateTime(reportCreatedAt))  // ✅ Approval의 createdAt 사용
                 .build();
     }
 

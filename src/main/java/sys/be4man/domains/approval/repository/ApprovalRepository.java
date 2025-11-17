@@ -6,8 +6,10 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import sys.be4man.domains.approval.model.entity.Approval;
 import sys.be4man.domains.approval.model.type.ApprovalStatus;
+import sys.be4man.domains.approval.model.type.ApprovalType;
+import sys.be4man.domains.deployment.model.type.DeploymentStage;
 
-public interface ApprovalRepository extends JpaRepository<Approval, Long> {
+public interface ApprovalRepository extends JpaRepository<Approval, Long>, ApprovalRepositoryCustom {
 
     List<Approval> findByAccountId(Long accountId);
     List<Approval> findByAccountIdAndStatus(Long accountId, ApprovalStatus status);
@@ -38,4 +40,6 @@ public interface ApprovalRepository extends JpaRepository<Approval, Long> {
             @Param("accountId") Long accountId,
             @Param("status") ApprovalStatus status
     );
+
+    List<Approval> findByDeploymentIdAndTypeOrderByIdAsc(Long taskId, ApprovalType approvalType);
 }
