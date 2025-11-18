@@ -45,7 +45,15 @@ public class StatisticsService {
 
     private final StatisticsRepositoryCustom statisticsRepository;
 
-    public FailureSeriesResponseDto getSeries(Long projectId, LocalDate from, LocalDate to) {
+    public FailureSeriesResponseDto getSeries(String serviceId, LocalDate from, LocalDate to) {
+        // serviceId 파싱
+        // null 또는 "all" -> projectId = null (전체)
+        // 숫자 문자열 -> 해당 projectId
+        Long projectId = null;
+        if (!isAll(serviceId)) {
+            projectId = parseLongOrNull(serviceId);
+        }
+
         // 시간 경계 (to는 exclusive)
         LocalDateTime fromTs = (from == null) ? null : from.atStartOfDay();
         LocalDateTime toTs = (to == null) ? null : to.plusDays(1).atStartOfDay();
@@ -61,6 +69,7 @@ public class StatisticsService {
         for (ProblemType pt : ProblemType.values()) {
             typeCounts.put(pt.name(), 0L);
         }
+
         for (TypeCountResponseDto row : typeCountsRows) {
             typeCounts.put(row.problemType(), row.cnt());
             total += row.cnt();
@@ -105,7 +114,7 @@ public class StatisticsService {
                 continue; // 방어(알 수 없는 타입)
             }
             var old = list.get(idx);
-            list.set(idx, new SeriesPointResponseDto(month, (old.count() + cnt)));
+            list.set(idx, new SeriesPointResponseDto(month, old.count() + cnt));
         }
 
         // 2-5) ALL = 모든 유형 합계
@@ -117,9 +126,10 @@ public class StatisticsService {
             series.get("ALL").set(i, new SeriesPointResponseDto(labels.get(i), sum));
         }
 
+        // projectId는 선택적으로만 채워짐 (전체일 때는 null)
         return new FailureSeriesResponseDto(
                 projectId,
-                new Summary(total, typeCounts),
+                new FailureSeriesResponseDto.Summary(total, typeCounts),
                 series
         );
     }
@@ -127,6 +137,7 @@ public class StatisticsService {
     // from/to 없으면 최근 12개월(현재 포함) 라벨 생성
     private List<String> buildMonthLabels(LocalDate from, LocalDate to) {
         List<String> labels = new ArrayList<>();
+
         if (from == null && to == null) {
             YearMonth ym = YearMonth.now().minusMonths(11);
             for (int i = 0; i < 12; i++) {
@@ -138,8 +149,9 @@ public class StatisticsService {
 
         LocalDate start =
                 (from != null) ? from.withDayOfMonth(1) : LocalDate.now().withDayOfMonth(1);
-        LocalDate endExclusive = (to != null ? to.plusDays(1)
-                : LocalDate.now().plusMonths(1)).withDayOfMonth(1);
+        LocalDate endExclusive =
+                (to != null ? to.plusDays(1) : LocalDate.now().plusMonths(1)).withDayOfMonth(1);
+
         YearMonth cur = YearMonth.from(start);
         YearMonth end = YearMonth.from(endExclusive);
         while (!cur.equals(end)) {
@@ -310,22 +322,25 @@ public class StatisticsService {
     }
 
     /**
-     * 배포 실패 → 다음 배포 성공까지 걸린 시간(분)을 프로젝트별로 집계
-     * - 케이스 A: 같은 deployment에서 재시도 (build_run 내에서 마지막 실패 → 다음 성공)
-     * - 케이스 B: 다른 deployment로 재시도 (같은 project+PR 안에서 실패 deployment → 다음 성공 deployment)
-     * - "실패만 있고 다음 성공이 아직 없는 경우"는 무시
+     * 배포 실패 → 다음 배포 성공까지 걸린 시간(분)을 프로젝트별로 집계 - 케이스 A: 같은 deployment에서 재시도 (build_run 내에서 마지막 실패 →
+     * 다음 성공) - 케이스 B: 다른 deployment로 재시도 (같은 project+PR 안에서 실패 deployment → 다음 성공 deployment) -
+     * "실패만 있고 다음 성공이 아직 없는 경우"는 무시
      */
     @Transactional(readOnly = true)
-    public TimeToNextSuccessResponse getTimeToNextSuccessPerProject(Long projectId, long thresholdMins) {
+    public TimeToNextSuccessResponse getTimeToNextSuccessPerProject(Long projectId,
+            long thresholdMins) {
 
         // ── 1) 원시 이벤트 조회
-        List<IntraBuildRow> intraRows = statisticsRepository.fetchIntraDeploymentBuildRuns(projectId);
-        List<CrossDeploymentRow> crossRows = statisticsRepository.fetchCrossDeploymentEvents(projectId);
+        List<IntraBuildRow> intraRows = statisticsRepository.fetchIntraDeploymentBuildRuns(
+                projectId);
+        List<CrossDeploymentRow> crossRows = statisticsRepository.fetchCrossDeploymentEvents(
+                projectId);
 
         // ── 2) 케이스 A: 같은 deployment 안에서 "마지막 실패 → 다음 성공"
         Map<Long, ProjectAgg> agg = new LinkedHashMap<>();
         Map<Long, List<IntraBuildRow>> byDeployment = intraRows.stream()
-                .collect(Collectors.groupingBy(IntraBuildRow::deploymentId, LinkedHashMap::new, Collectors.toList()));
+                .collect(Collectors.groupingBy(IntraBuildRow::deploymentId, LinkedHashMap::new,
+                        Collectors.toList()));
 
         for (List<IntraBuildRow> logs : byDeployment.values()) {
             // 정렬 보장(쿼리에서 already ASC), 그래도 혹시 모를 null 방어
@@ -333,37 +348,55 @@ public class StatisticsService {
                     .filter(r -> r.startedAt() != null && r.isBuild() != null)
                     .sorted(Comparator.comparing(IntraBuildRow::startedAt))
                     .toList();
-            if (logs.isEmpty()) continue;
+            if (logs.isEmpty()) {
+                continue;
+            }
 
             // "가장 최근 실패" 인덱스 찾기
             int lastFail = -1;
             for (int i = logs.size() - 1; i >= 0; i--) {
-                if (Boolean.FALSE.equals(logs.get(i).isBuild())) { lastFail = i; break; }
+                if (Boolean.FALSE.equals(logs.get(i).isBuild())) {
+                    lastFail = i;
+                    break;
+                }
             }
-            if (lastFail < 0) continue; // 실패 없음 → 스킵
+            if (lastFail < 0) {
+                continue; // 실패 없음 → 스킵
+            }
 
             // 그 다음 성공 찾기
             LocalDateTime failAt = logs.get(lastFail).startedAt();
             LocalDateTime nextSuccessAt = null;
             for (int j = lastFail + 1; j < logs.size(); j++) {
-                if (Boolean.TRUE.equals(logs.get(j).isBuild())) { nextSuccessAt = logs.get(j).startedAt(); break; }
+                if (Boolean.TRUE.equals(logs.get(j).isBuild())) {
+                    nextSuccessAt = logs.get(j).startedAt();
+                    break;
+                }
             }
-            if (nextSuccessAt == null) continue; // 다음 성공 없음 → 스킵
+            if (nextSuccessAt == null) {
+                continue; // 다음 성공 없음 → 스킵
+            }
 
             long minutes = Duration.between(failAt, nextSuccessAt).toMinutes();
-            if (minutes < 0) continue; // 역전 방어
+            if (minutes < 0) {
+                continue; // 역전 방어
+            }
 
             Long pid = logs.get(0).projectId();
             String pname = logs.get(0).projectName();
             agg.compute(pid, (k, a) -> {
-                if (a == null) a = new ProjectAgg(pname);
+                if (a == null) {
+                    a = new ProjectAgg(pname);
+                }
                 a.samples.add(minutes);
                 return a;
             });
         }
 
         // ── 3) 케이스 B: 다른 deployment로 재시도 (같은 project+PR 안에서)
-        record PRKey(Long projectId, Long pullRequestId, String projectName) {}
+        record PRKey(Long projectId, Long pullRequestId, String projectName) {
+
+        }
         Map<PRKey, List<CrossDeploymentRow>> byPR = crossRows.stream()
                 .collect(Collectors.groupingBy(
                         r -> new PRKey(r.projectId(), r.pullRequestId(), r.projectName()),
@@ -376,30 +409,46 @@ public class StatisticsService {
                     .filter(r -> r.startedAt() != null && r.isDeployed() != null)
                     .sorted(Comparator.comparing(CrossDeploymentRow::startedAt))
                     .toList();
-            if (seq.isEmpty()) continue;
+            if (seq.isEmpty()) {
+                continue;
+            }
 
             // "가장 최근 실패" 찾기
             int lastFail = -1;
             for (int i = seq.size() - 1; i >= 0; i--) {
-                if (Boolean.FALSE.equals(seq.get(i).isDeployed())) { lastFail = i; break; }
+                if (Boolean.FALSE.equals(seq.get(i).isDeployed())) {
+                    lastFail = i;
+                    break;
+                }
             }
-            if (lastFail < 0) continue;
+            if (lastFail < 0) {
+                continue;
+            }
 
             // 그 다음 성공 찾기
             LocalDateTime failAt = seq.get(lastFail).startedAt();
             LocalDateTime nextSuccessAt = null;
             for (int j = lastFail + 1; j < seq.size(); j++) {
-                if (Boolean.TRUE.equals(seq.get(j).isDeployed())) { nextSuccessAt = seq.get(j).startedAt(); break; }
+                if (Boolean.TRUE.equals(seq.get(j).isDeployed())) {
+                    nextSuccessAt = seq.get(j).startedAt();
+                    break;
+                }
             }
-            if (nextSuccessAt == null) continue; // 다음 성공 없음 → 스킵
+            if (nextSuccessAt == null) {
+                continue; // 다음 성공 없음 → 스킵
+            }
 
             long minutes = Duration.between(failAt, nextSuccessAt).toMinutes();
-            if (minutes < 0) continue;
+            if (minutes < 0) {
+                continue;
+            }
 
             Long pid = e.getKey().projectId();
             String pname = e.getKey().projectName();
             agg.compute(pid, (k, a) -> {
-                if (a == null) a = new ProjectAgg(pname);
+                if (a == null) {
+                    a = new ProjectAgg(pname);
+                }
                 a.samples.add(minutes);
                 return a;
             });
@@ -430,8 +479,12 @@ public class StatisticsService {
 
     // 내부 누적용
     private static final class ProjectAgg {
+
         final String projectName;
         final List<Long> samples = new ArrayList<>();
-        ProjectAgg(String projectName) { this.projectName = projectName; }
+
+        ProjectAgg(String projectName) {
+            this.projectName = projectName;
+        }
     }
 }
