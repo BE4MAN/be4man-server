@@ -7,4 +7,6 @@ import sys.be4man.domains.analysis.model.entity.BuildRun;
 public interface BuildRunRepository extends JpaRepository<BuildRun, Long>, BuildRunRepositoryCustom {
 
     Optional<BuildRun> findByDeploymentIdAndIdAndIsDeletedFalse(Long deploymentId, Long buildRunId);
+
+    Optional<BuildRun> findByDeploymentIdAndIsDeletedFalse(Long taskId);
 }
