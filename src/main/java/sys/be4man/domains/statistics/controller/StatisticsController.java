@@ -24,13 +24,17 @@ public class StatisticsController {
      * 예) /api/projects/42/deploy-failures/stats 예)
      * /api/projects/42/deploy-failures/stats?from=2025-01-01&to=2025-11-30
      */
-    @GetMapping("/{projectId}/deploy-failures/series")
+    @GetMapping("/deploy-failures/series")
     public ResponseEntity<FailureSeriesResponseDto> series(
-            @PathVariable Long projectId,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to
+            @RequestParam(required = false) String serviceId,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+            LocalDate from,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+            LocalDate to
     ) {
-        return ResponseEntity.ok(statisticsService.getSeries(projectId, from, to));
+        return ResponseEntity.ok(statisticsService.getSeries(serviceId, from, to));
     }
 
     @GetMapping("/deploy-success-rate")
