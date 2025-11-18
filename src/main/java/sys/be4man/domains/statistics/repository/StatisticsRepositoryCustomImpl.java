@@ -9,8 +9,10 @@ import com.querydsl.core.types.dsl.BooleanExpression;
 import com.querydsl.core.types.dsl.CaseBuilder;
 import com.querydsl.core.types.dsl.DateTemplate;
 import com.querydsl.core.types.dsl.DateTimeExpression;
+import com.querydsl.core.types.dsl.DateTimePath;
 import com.querydsl.core.types.dsl.Expressions;
 import com.querydsl.core.types.dsl.NumberExpression;
+import com.querydsl.core.types.dsl.StringExpression;
 import com.querydsl.jpa.JPAExpressions;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import java.time.LocalDate;
@@ -24,9 +26,13 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 import sys.be4man.domains.analysis.model.entity.QBuildRun;
 import sys.be4man.domains.analysis.model.entity.QStageRun;
+import sys.be4man.domains.ban.model.entity.QBan;
+import sys.be4man.domains.ban.model.entity.QProjectBan;
 import sys.be4man.domains.deployment.model.entity.QDeployment;
 import sys.be4man.domains.project.model.entity.QProject;
 import sys.be4man.domains.statistics.dto.response.TypeCountResponseDto;
+import sys.be4man.domains.statistics.repository.projection.CrossDeploymentRow;
+import sys.be4man.domains.statistics.repository.projection.IntraBuildRow;
 import sys.be4man.domains.statistics.repository.projection.MonthBucket;
 import sys.be4man.domains.statistics.repository.projection.ProjectLight;
 import sys.be4man.domains.statistics.repository.projection.ProjectSuccessCount;
@@ -38,37 +44,40 @@ import sys.be4man.domains.statistics.repository.projection.YearBucket;
 public class StatisticsRepositoryCustomImpl implements StatisticsRepositoryCustom {
 
     private final JPAQueryFactory jpaQueryFactory;
+
     private final QStageRun stageRun = QStageRun.stageRun;
     private final QBuildRun buildRun = QBuildRun.buildRun;
     private static final QBuildRun buildRun2 = new QBuildRun("buildRun2");
     private final QDeployment deployment = QDeployment.deployment;
     private final QProject project = QProject.project;
 
+    private static final QProjectBan projectBan = QProjectBan.projectBan;
+    private static final QBan ban = QBan.ban;
+
+    // ------------------------------------------------------------
+    // 실패 유형 집계 / 월별 시리즈 / 성공·실패 카운트 / 평균 소요시간 / 프로젝트 목록
+    // ------------------------------------------------------------
+
     @Override
     public List<TypeCountResponseDto> countByProblemTypeForProject(
             Long projectId, LocalDateTime from, LocalDateTime to) {
 
-        QStageRun s = stageRun;
-        QBuildRun b = buildRun;
-        QDeployment d = deployment;
-
-        return jpaQueryFactory.select(
-                        Projections.constructor(
-                                TypeCountResponseDto.class,
-                                s.problemType.stringValue(), // enum -> String
-                                count(s.id)
-                        )
-                )
-                .from(s)
-                .join(s.buildRun, b)
-                .join(b.deployment, d)
+        return jpaQueryFactory
+                .select(Projections.constructor(
+                        TypeCountResponseDto.class,
+                        stageRun.problemType.stringValue(), // enum -> String
+                        count(stageRun.id)
+                ))
+                .from(stageRun)
+                .join(stageRun.buildRun, buildRun)
+                .join(buildRun.deployment, deployment)
                 .where(
-                        d.project.id.eq(projectId),
-                        s.isSuccess.isFalse(),
-                        s.problemType.isNotNull(),
-                        betweenOrNull(b.startedAt, from, to)
+                        deployment.project.id.eq(projectId),
+                        stageRun.isSuccess.isFalse(),
+                        stageRun.problemType.isNotNull(),
+                        betweenOrNull(buildRun.startedAt, from, to)
                 )
-                .groupBy(s.problemType)
+                .groupBy(stageRun.problemType)
                 .fetch();
     }
 
@@ -76,69 +85,54 @@ public class StatisticsRepositoryCustomImpl implements StatisticsRepositoryCusto
     public List<MonthlyTypeCountRow> monthlySeriesAllTypes(
             Long projectId, LocalDateTime from, LocalDateTime to) {
 
-        QStageRun s = stageRun;
-        QBuildRun b = buildRun;
-        QDeployment d = deployment;
-
         // month label: "YYYY-MM"
         var monthLabel = Expressions.stringTemplate(
-                "to_char(date_trunc('month', {0}), 'YYYY-MM')", b.startedAt);
+                "to_char(date_trunc('month', {0}), 'YYYY-MM')", buildRun.startedAt);
 
-        // group key for ordering: date_trunc('month', started_at)
+        // group key for ordering
         DateTemplate<LocalDateTime> monthKey = Expressions.dateTemplate(
-                LocalDateTime.class, "date_trunc('month', {0})", b.startedAt);
+                LocalDateTime.class, "date_trunc('month', {0})", buildRun.startedAt);
 
-        return jpaQueryFactory.select(
-                        Projections.constructor(
-                                MonthlyTypeCountRow.class,
-                                s.problemType.stringValue(), // String
-                                monthLabel,                  // "YYYY-MM"
-                                count(s.id)
-                        )
-                )
-                .from(s)
-                .join(s.buildRun, b)
-                .join(b.deployment, d)
+        return jpaQueryFactory
+                .select(Projections.constructor(
+                        MonthlyTypeCountRow.class,
+                        stageRun.problemType.stringValue(),
+                        monthLabel,
+                        count(stageRun.id)
+                ))
+                .from(stageRun)
+                .join(stageRun.buildRun, buildRun)
+                .join(buildRun.deployment, deployment)
                 .where(
-                        d.project.id.eq(projectId),
-                        s.isSuccess.isFalse(),
-                        s.problemType.isNotNull(),
-                        betweenOrNull(b.startedAt, from, to)
+                        deployment.project.id.eq(projectId),
+                        stageRun.isSuccess.isFalse(),
+                        stageRun.problemType.isNotNull(),
+                        betweenOrNull(buildRun.startedAt, from, to)
                 )
-                .groupBy(s.problemType, monthKey)
+                .groupBy(stageRun.problemType, monthKey)
                 .orderBy(monthKey.asc())
                 .fetch();
     }
 
     private BooleanExpression betweenOrNull(
-            com.querydsl.core.types.dsl.DateTimePath<LocalDateTime> path,
+            DateTimePath<LocalDateTime> path,
             LocalDateTime from, LocalDateTime to
     ) {
         BooleanExpression ge = (from == null) ? null : path.goe(from);
         BooleanExpression lt = (to == null) ? null : path.lt(to);
-        if (ge == null) {
-            return lt;
-        }
-        if (lt == null) {
-            return ge;
-        }
+        if (ge == null) return lt;
+        if (lt == null) return ge;
         return ge.and(lt);
     }
 
-    /**
-     * 프로젝트가 하나도 배포가 없어도 반드시 결과에 포함되도록 FROM project LEFT JOIN deployment ... 로 변경. 성공/실패는
-     * is_deployed = true/false만 집계, null은 제외.
-     */
     @Override
     public List<ProjectSuccessCount> findProjectSuccessCounts() {
 
-        // sum(case when deployment.is_deployed = true then 1 else 0 end)
         NumberExpression<Long> successSum = new CaseBuilder()
                 .when(deployment.isDeployed.isTrue()).then(1L)
                 .otherwise(0L)
                 .sum();
 
-        // sum(case when deployment.is_deployed = false then 1 else 0 end)
         NumberExpression<Long> failedSum = new CaseBuilder()
                 .when(deployment.isDeployed.isFalse()).then(1L)
                 .otherwise(0L)
@@ -147,29 +141,22 @@ public class StatisticsRepositoryCustomImpl implements StatisticsRepositoryCusto
         return jpaQueryFactory
                 .select(Projections.constructor(
                         ProjectSuccessCount.class,
-                        project.id,        // projectId
-                        project.name,      // projectName
-                        // 일부 DB/드라이버에서 모두 0이면 null일 수 있어 coalesce로 방어
+                        project.id,
+                        project.name,
                         successSum.coalesce(0L),
                         failedSum.coalesce(0L)
                 ))
                 .from(project)
-                // ✅ LEFT JOIN: 배포가 없는 프로젝트도 결과에 포함
                 .leftJoin(deployment)
                 .on(
                         deployment.project.id.eq(project.id),
-                        // 배포 soft delete 제외 (deployment가 null일 수 있으므로 ON 절에 둠)
                         deployment.isDeleted.isFalse()
                 )
-                // 프로젝트 soft delete 제외
                 .where(project.isDeleted.isFalse())
                 .groupBy(project.id, project.name)
                 .fetch();
     }
 
-    /**
-     * 전체 합계는 모든 프로젝트를 가리지 않고 배포 기준으로 집계. (배포가 없는 프로젝트는 합계에 영향이 없으므로 기존 방식 유지)
-     */
     @Override
     public TotalSuccessCount findTotalSuccessCounts() {
 
@@ -202,9 +189,8 @@ public class StatisticsRepositoryCustomImpl implements StatisticsRepositoryCusto
     public Map<YearMonth, Double> findMonthlyAvgDuration(Long projectId, String projectName,
             LocalDate startInclusive, LocalDate endExclusive) {
 
-        // PostgreSQL: date_trunc('month', timestamp)
         DateTimeExpression<LocalDateTime> monthTrunc =
-                Expressions.dateTimeTemplate(java.time.LocalDateTime.class,
+                Expressions.dateTimeTemplate(LocalDateTime.class,
                         "date_trunc('month', {0})", buildRun.startedAt);
 
         List<Tuple> rows = jpaQueryFactory
@@ -218,7 +204,6 @@ public class StatisticsRepositoryCustomImpl implements StatisticsRepositoryCusto
                 .where(
                         buildRun.startedAt.goe(startInclusive.atStartOfDay()),
                         buildRun.startedAt.lt(endExclusive.atStartOfDay()),
-                        // service 필터: id 또는 name
                         projectId != null ? project.id.eq(projectId) : null,
                         projectName != null ? project.name.eq(projectName) : null
                 )
@@ -228,7 +213,7 @@ public class StatisticsRepositoryCustomImpl implements StatisticsRepositoryCusto
 
         Map<YearMonth, Double> map = new HashMap<>();
         for (Tuple t : rows) {
-            java.time.LocalDateTime monthStart = t.get(0, java.time.LocalDateTime.class);
+            LocalDateTime monthStart = t.get(0, LocalDateTime.class);
             Double avgSec = t.get(1, Double.class);
             if (monthStart != null && avgSec != null) {
                 YearMonth ym = YearMonth.from(
@@ -264,12 +249,11 @@ public class StatisticsRepositoryCustomImpl implements StatisticsRepositoryCusto
         NumberExpression<Long> failedCase = new CaseBuilder()
                 .when(deployment.isDeployed.isFalse()).then(1L).otherwise(0L);
 
-        SubQueryExpression<java.time.LocalDateTime> maxEndedSub =
+        SubQueryExpression<LocalDateTime> maxEndedSub =
                 JPAExpressions.select(buildRun2.endedAt.max())
                         .from(buildRun2)
                         .where(buildRun2.deployment.id.eq(deployment.id));
 
-        BooleanExpression deployedKnown = deployment.isDeployed.isNotNull();
         BooleanExpression projectFilter = (projectId == null) ? null : deployment.project.id.eq(projectId);
 
         return jpaQueryFactory
@@ -284,7 +268,6 @@ public class StatisticsRepositoryCustomImpl implements StatisticsRepositoryCusto
                 .join(buildRun).on(buildRun.deployment.id.eq(deployment.id))
                 .where(
                         buildRun.endedAt.eq(maxEndedSub),
-                        deployedKnown,
                         deployment.isDeleted.isFalse(),
                         buildRun.isDeleted.isFalse(),
                         projectFilter
@@ -293,7 +276,6 @@ public class StatisticsRepositoryCustomImpl implements StatisticsRepositoryCusto
                 .orderBy(monthExpr.asc())
                 .fetch();
     }
-
 
     @Override
     public List<YearBucket> findYearlyDeploymentFinalStats(Long projectId) {
@@ -306,12 +288,11 @@ public class StatisticsRepositoryCustomImpl implements StatisticsRepositoryCusto
         NumberExpression<Long> failedCase = new CaseBuilder()
                 .when(deployment.isDeployed.isFalse()).then(1L).otherwise(0L);
 
-        SubQueryExpression<java.time.LocalDateTime> maxEndedSub =
+        SubQueryExpression<LocalDateTime> maxEndedSub =
                 JPAExpressions.select(buildRun2.endedAt.max())
                         .from(buildRun2)
                         .where(buildRun2.deployment.id.eq(deployment.id));
 
-        BooleanExpression deployedKnown = deployment.isDeployed.isNotNull();
         BooleanExpression projectFilter = (projectId == null) ? null : deployment.project.id.eq(projectId);
 
         return jpaQueryFactory
@@ -326,7 +307,6 @@ public class StatisticsRepositoryCustomImpl implements StatisticsRepositoryCusto
                 .join(buildRun).on(buildRun.deployment.id.eq(deployment.id))
                 .where(
                         buildRun.endedAt.eq(maxEndedSub),
-                        deployedKnown,
                         deployment.isDeleted.isFalse(),
                         buildRun.isDeleted.isFalse(),
                         projectFilter
@@ -335,5 +315,99 @@ public class StatisticsRepositoryCustomImpl implements StatisticsRepositoryCusto
                 .orderBy(yearExpr.asc())
                 .fetch();
     }
-}
 
+    @Override
+    public List<StatisticsRepositoryCustom.BanTypeRow> findBanTypeCounts(Long projectId) {
+
+        // ban.type 이 enum이면: b.type.stringValue()
+        // 문자열이면: b.type (StringPath) 그대로 사용 가능
+        StringExpression typeExpr = ban.type.stringValue();
+
+        BooleanExpression filter =
+                (projectId == null) ? project.isDeleted.isFalse()
+                        : project.id.eq(projectId).and(project.isDeleted.isFalse());
+
+        return jpaQueryFactory.select(
+                        Projections.constructor(
+                                StatisticsRepositoryCustom.BanTypeRow.class,
+                                typeExpr,                         // type
+                                projectBan.id.count()             // count (project_ban 기준 집계)
+                        )
+                )
+                .from(projectBan)
+                .join(projectBan.ban, ban)
+                .join(projectBan.project, project)
+                .where(
+                        projectBan.isDeleted.isFalse(),
+                        ban.isDeleted.isFalse(),
+                        filter
+                )
+                .groupBy(typeExpr)
+                .orderBy(typeExpr.asc())
+                .fetch();
+    }
+
+    @Override
+    public List<IntraBuildRow> fetchIntraDeploymentBuildRuns(Long projectId) {
+        // 조건
+        BooleanExpression filter = buildRun.isDeleted.isFalse()
+                .and(deployment.isDeleted.isFalse())
+                .and(project.isDeleted.isFalse())
+                .and(deployment.isDeployed.isTrue())        // 같은 deployment 안에서 "다음 성공"을 만들려면, 최종적으로 성공한 배포만 대상으로
+                .and(buildRun.startedAt.isNotNull());
+        if (projectId != null) {
+            filter = filter.and(project.id.eq(projectId));
+        }
+
+        return jpaQueryFactory
+                .select(Projections.constructor(
+                        IntraBuildRow.class,
+                        deployment.id,         // deploymentId
+                        project.id,         // projectId
+                        project.name,       // projectName
+                        buildRun.startedAt, // startedAt
+                        buildRun.isBuild    // isBuild (false=실패, true=성공)
+                ))
+                .from(buildRun)
+                .join(buildRun.deployment, deployment)
+                .join(deployment.project, project)
+                .where(filter)
+                .orderBy(deployment.id.asc(), buildRun.startedAt.asc())
+                .fetch();
+    }
+
+    @Override
+    public List<CrossDeploymentRow> fetchCrossDeploymentEvents(Long projectId) {
+        // 각 deployment별 대표 시작시각: min(build_run.started_at)
+        DateTimeExpression<LocalDateTime> minStart =
+                Expressions.dateTimeTemplate(LocalDateTime.class, "min({0})", buildRun.startedAt);
+
+        BooleanExpression base = buildRun.isDeleted.isFalse()
+                .and(deployment.isDeleted.isFalse())
+                .and(project.isDeleted.isFalse())
+                .and(deployment.isDeployed.isNotNull())
+                .and(buildRun.startedAt.isNotNull());
+
+        if (projectId != null) {
+            base = base.and(project.id.eq(projectId));
+        }
+
+        return jpaQueryFactory
+                .select(Projections.constructor(
+                        CrossDeploymentRow.class,
+                        project.id,                 // projectId
+                        project.name,               // projectName
+                        deployment.pullRequest.id,     // pullRequestId
+                        minStart,             // 대표 startedAt (min)
+                        deployment.isDeployed          // 해당 deployment의 최종 결과 true/false
+                ))
+                .from(buildRun)
+                .join(buildRun.deployment, deployment)
+                .join(deployment.project, project)
+                .where(base)
+                .groupBy(project.id, project.name, deployment.pullRequest.id, deployment.isDeployed)
+                .orderBy(project.id.asc(), deployment.pullRequest.id.asc(), minStart.asc())
+                .fetch();
+    }
+
+}

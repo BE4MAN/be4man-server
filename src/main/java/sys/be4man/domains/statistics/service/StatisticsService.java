@@ -1,5 +1,6 @@
 package sys.be4man.domains.statistics.service;
 
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
@@ -14,7 +15,9 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import sys.be4man.domains.analysis.model.type.ProblemType;
+import sys.be4man.domains.statistics.dto.response.BanTypeStatsResponse;
 import sys.be4man.domains.statistics.dto.response.DeployDurationResponse;
 import sys.be4man.domains.statistics.dto.response.DeploySuccessRateResponseDto;
 import sys.be4man.domains.statistics.dto.response.DeploySuccessRateResponseDto.Count;
@@ -25,8 +28,12 @@ import sys.be4man.domains.statistics.dto.response.MonthDurationDto;
 import sys.be4man.domains.statistics.dto.response.PeriodStatsResponse;
 import sys.be4man.domains.statistics.dto.response.SeriesPointResponseDto;
 import sys.be4man.domains.statistics.dto.response.ServiceOptionDto;
+import sys.be4man.domains.statistics.dto.response.TimeToNextSuccessItem;
+import sys.be4man.domains.statistics.dto.response.TimeToNextSuccessResponse;
 import sys.be4man.domains.statistics.dto.response.TypeCountResponseDto;
 import sys.be4man.domains.statistics.repository.StatisticsRepositoryCustom;
+import sys.be4man.domains.statistics.repository.projection.CrossDeploymentRow;
+import sys.be4man.domains.statistics.repository.projection.IntraBuildRow;
 import sys.be4man.domains.statistics.repository.projection.MonthBucket;
 import sys.be4man.domains.statistics.repository.projection.ProjectSuccessCount;
 import sys.be4man.domains.statistics.repository.projection.TotalSuccessCount;
@@ -41,7 +48,7 @@ public class StatisticsService {
     public FailureSeriesResponseDto getSeries(Long projectId, LocalDate from, LocalDate to) {
         // 시간 경계 (to는 exclusive)
         LocalDateTime fromTs = (from == null) ? null : from.atStartOfDay();
-        LocalDateTime toTs   = (to   == null) ? null : to.plusDays(1).atStartOfDay();
+        LocalDateTime toTs = (to == null) ? null : to.plusDays(1).atStartOfDay();
 
         // 1) summary: 유형별 총합
         List<TypeCountResponseDto> typeCountsRows =
@@ -81,16 +88,22 @@ public class StatisticsService {
 
         // 2-4) 값 채우기: 유형별 해당 month index 찾아서 count 반영
         Map<String, Integer> indexMap = new HashMap<>();
-        for (int i = 0; i < labels.size(); i++) indexMap.put(labels.get(i), i);
+        for (int i = 0; i < labels.size(); i++) {
+            indexMap.put(labels.get(i), i);
+        }
 
         for (var row : rawRows) {
             String type = row.problemType();
             String month = row.month();
             Long cnt = row.count();
             Integer idx = indexMap.get(month);
-            if (idx == null) continue; // 방어
+            if (idx == null) {
+                continue; // 방어
+            }
             var list = series.get(type);
-            if (list == null) continue; // 방어(알 수 없는 타입)
+            if (list == null) {
+                continue; // 방어(알 수 없는 타입)
+            }
             var old = list.get(idx);
             list.set(idx, new SeriesPointResponseDto(month, (old.count() + cnt)));
         }
@@ -123,8 +136,10 @@ public class StatisticsService {
             return labels;
         }
 
-        LocalDate start = (from != null) ? from.withDayOfMonth(1) : LocalDate.now().withDayOfMonth(1);
-        LocalDate endExclusive = (to != null ? to.plusDays(1) : LocalDate.now().plusMonths(1)).withDayOfMonth(1);
+        LocalDate start =
+                (from != null) ? from.withDayOfMonth(1) : LocalDate.now().withDayOfMonth(1);
+        LocalDate endExclusive = (to != null ? to.plusDays(1)
+                : LocalDate.now().plusMonths(1)).withDayOfMonth(1);
         YearMonth cur = YearMonth.from(start);
         YearMonth end = YearMonth.from(endExclusive);
         while (!cur.equals(end)) {
@@ -169,7 +184,8 @@ public class StatisticsService {
 
         // service 파싱: 숫자면 projectId, 아니면 projectName 로 간주
         Long projectId = parseLongOrNull(service);
-        String projectName = (projectId == null && !"all".equalsIgnoreCase(service)) ? service : null;
+        String projectName =
+                (projectId == null && !"all".equalsIgnoreCase(service)) ? service : null;
 
         // 월별 평균(초)을 조회 → 서비스에서 "월 시퀄 채우기 + 분으로 변환"
         Map<YearMonth, Double> avgSecByMonth = statisticsRepository
@@ -201,7 +217,9 @@ public class StatisticsService {
 
     private static Long parseLongOrNull(String s) {
         try {
-            if (s == null) return null;
+            if (s == null) {
+                return null;
+            }
             return Long.parseLong(s);
         } catch (NumberFormatException e) {
             return null;
@@ -209,8 +227,7 @@ public class StatisticsService {
     }
 
     /**
-     * 월 시퀀스를 12칸으로 고정하고, 누락된 달은 0분으로 채움.
-     * 초 → 분(double) 변환 시 60.0으로 나눔.
+     * 월 시퀀스를 12칸으로 고정하고, 누락된 달은 0분으로 채움. 초 → 분(double) 변환 시 60.0으로 나눔.
      */
     private static List<MonthDurationDto> densifyAndConvertToMinutes(
             YearMonth startYm, int count, Map<YearMonth, Double> avgSecByMonth
@@ -253,8 +270,8 @@ public class StatisticsService {
                 .mapToObj(m -> {
                     MonthBucket b = map.get(m);
                     long deployments = b != null ? b.deployments() : 0L;
-                    long success     = b != null ? b.success()     : 0L;
-                    long failed      = b != null ? b.failed()      : 0L;
+                    long success = b != null ? b.success() : 0L;
+                    long failed = b != null ? b.failed() : 0L;
                     return new PeriodStatsResponse.Item(
                             String.valueOf(m), deployments, success, failed
                     );
@@ -280,4 +297,141 @@ public class StatisticsService {
         return new PeriodStatsResponse("year", projectId, items);
     }
 
+    public BanTypeStatsResponse getBanTypeStats(Long projectId) {
+        var rows = statisticsRepository.findBanTypeCounts(projectId);
+
+        long total = rows.stream().mapToLong(r -> r.count()).sum();
+
+        var items = rows.stream()
+                .map(r -> new BanTypeStatsResponse.Item(r.type(), r.count()))
+                .toList();
+
+        return new BanTypeStatsResponse(projectId, items, total);
+    }
+
+    /**
+     * 배포 실패 → 다음 배포 성공까지 걸린 시간(분)을 프로젝트별로 집계
+     * - 케이스 A: 같은 deployment에서 재시도 (build_run 내에서 마지막 실패 → 다음 성공)
+     * - 케이스 B: 다른 deployment로 재시도 (같은 project+PR 안에서 실패 deployment → 다음 성공 deployment)
+     * - "실패만 있고 다음 성공이 아직 없는 경우"는 무시
+     */
+    @Transactional(readOnly = true)
+    public TimeToNextSuccessResponse getTimeToNextSuccessPerProject(Long projectId, long thresholdMins) {
+
+        // ── 1) 원시 이벤트 조회
+        List<IntraBuildRow> intraRows = statisticsRepository.fetchIntraDeploymentBuildRuns(projectId);
+        List<CrossDeploymentRow> crossRows = statisticsRepository.fetchCrossDeploymentEvents(projectId);
+
+        // ── 2) 케이스 A: 같은 deployment 안에서 "마지막 실패 → 다음 성공"
+        Map<Long, ProjectAgg> agg = new LinkedHashMap<>();
+        Map<Long, List<IntraBuildRow>> byDeployment = intraRows.stream()
+                .collect(Collectors.groupingBy(IntraBuildRow::deploymentId, LinkedHashMap::new, Collectors.toList()));
+
+        for (List<IntraBuildRow> logs : byDeployment.values()) {
+            // 정렬 보장(쿼리에서 already ASC), 그래도 혹시 모를 null 방어
+            logs = logs.stream()
+                    .filter(r -> r.startedAt() != null && r.isBuild() != null)
+                    .sorted(Comparator.comparing(IntraBuildRow::startedAt))
+                    .toList();
+            if (logs.isEmpty()) continue;
+
+            // "가장 최근 실패" 인덱스 찾기
+            int lastFail = -1;
+            for (int i = logs.size() - 1; i >= 0; i--) {
+                if (Boolean.FALSE.equals(logs.get(i).isBuild())) { lastFail = i; break; }
+            }
+            if (lastFail < 0) continue; // 실패 없음 → 스킵
+
+            // 그 다음 성공 찾기
+            LocalDateTime failAt = logs.get(lastFail).startedAt();
+            LocalDateTime nextSuccessAt = null;
+            for (int j = lastFail + 1; j < logs.size(); j++) {
+                if (Boolean.TRUE.equals(logs.get(j).isBuild())) { nextSuccessAt = logs.get(j).startedAt(); break; }
+            }
+            if (nextSuccessAt == null) continue; // 다음 성공 없음 → 스킵
+
+            long minutes = Duration.between(failAt, nextSuccessAt).toMinutes();
+            if (minutes < 0) continue; // 역전 방어
+
+            Long pid = logs.get(0).projectId();
+            String pname = logs.get(0).projectName();
+            agg.compute(pid, (k, a) -> {
+                if (a == null) a = new ProjectAgg(pname);
+                a.samples.add(minutes);
+                return a;
+            });
+        }
+
+        // ── 3) 케이스 B: 다른 deployment로 재시도 (같은 project+PR 안에서)
+        record PRKey(Long projectId, Long pullRequestId, String projectName) {}
+        Map<PRKey, List<CrossDeploymentRow>> byPR = crossRows.stream()
+                .collect(Collectors.groupingBy(
+                        r -> new PRKey(r.projectId(), r.pullRequestId(), r.projectName()),
+                        LinkedHashMap::new,
+                        Collectors.toList()
+                ));
+
+        for (Map.Entry<PRKey, List<CrossDeploymentRow>> e : byPR.entrySet()) {
+            List<CrossDeploymentRow> seq = e.getValue().stream()
+                    .filter(r -> r.startedAt() != null && r.isDeployed() != null)
+                    .sorted(Comparator.comparing(CrossDeploymentRow::startedAt))
+                    .toList();
+            if (seq.isEmpty()) continue;
+
+            // "가장 최근 실패" 찾기
+            int lastFail = -1;
+            for (int i = seq.size() - 1; i >= 0; i--) {
+                if (Boolean.FALSE.equals(seq.get(i).isDeployed())) { lastFail = i; break; }
+            }
+            if (lastFail < 0) continue;
+
+            // 그 다음 성공 찾기
+            LocalDateTime failAt = seq.get(lastFail).startedAt();
+            LocalDateTime nextSuccessAt = null;
+            for (int j = lastFail + 1; j < seq.size(); j++) {
+                if (Boolean.TRUE.equals(seq.get(j).isDeployed())) { nextSuccessAt = seq.get(j).startedAt(); break; }
+            }
+            if (nextSuccessAt == null) continue; // 다음 성공 없음 → 스킵
+
+            long minutes = Duration.between(failAt, nextSuccessAt).toMinutes();
+            if (minutes < 0) continue;
+
+            Long pid = e.getKey().projectId();
+            String pname = e.getKey().projectName();
+            agg.compute(pid, (k, a) -> {
+                if (a == null) a = new ProjectAgg(pname);
+                a.samples.add(minutes);
+                return a;
+            });
+        }
+
+        // ── 4) 프로젝트별 집계 → 응답 아이템
+        List<TimeToNextSuccessItem> items = agg.entrySet().stream()
+                .map(en -> {
+                    Long pid = en.getKey();
+                    ProjectAgg a = en.getValue();
+                    long cnt = a.samples.size();
+                    long sum = a.samples.stream().mapToLong(Long::longValue).sum();
+                    long avg = cnt == 0 ? 0 : Math.round((double) sum / cnt);
+
+                    long within = 0, over = 0;
+                    for (long m : a.samples) {
+                        long w = Math.min(m, thresholdMins);
+                        within += w;
+                        over += Math.max(0, m - thresholdMins);
+                    }
+                    return new TimeToNextSuccessItem(pid, a.projectName, avg, cnt, within, over);
+                })
+                .sorted(Comparator.comparing(TimeToNextSuccessItem::projectId))
+                .toList();
+
+        return new TimeToNextSuccessResponse(thresholdMins, items);
+    }
+
+    // 내부 누적용
+    private static final class ProjectAgg {
+        final String projectName;
+        final List<Long> samples = new ArrayList<>();
+        ProjectAgg(String projectName) { this.projectName = projectName; }
+    }
 }
