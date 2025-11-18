@@ -60,8 +60,10 @@ public class StatisticsRepositoryCustomImpl implements StatisticsRepositoryCusto
 
     @Override
     public List<TypeCountResponseDto> countByProblemTypeForProject(
-            Long projectId, LocalDateTime from, LocalDateTime to) {
-
+            Long projectId,
+            LocalDateTime from,
+            LocalDateTime to
+    ) {
         return jpaQueryFactory
                 .select(Projections.constructor(
                         TypeCountResponseDto.class,
@@ -72,7 +74,7 @@ public class StatisticsRepositoryCustomImpl implements StatisticsRepositoryCusto
                 .join(stageRun.buildRun, buildRun)
                 .join(buildRun.deployment, deployment)
                 .where(
-                        deployment.project.id.eq(projectId),
+                        projectId != null ? deployment.project.id.eq(projectId) : null,
                         stageRun.isSuccess.isFalse(),
                         stageRun.problemType.isNotNull(),
                         betweenOrNull(buildRun.startedAt, from, to)
@@ -83,28 +85,35 @@ public class StatisticsRepositoryCustomImpl implements StatisticsRepositoryCusto
 
     @Override
     public List<MonthlyTypeCountRow> monthlySeriesAllTypes(
-            Long projectId, LocalDateTime from, LocalDateTime to) {
-
+            Long projectId,
+            LocalDateTime from,
+            LocalDateTime to
+    ) {
         // month label: "YYYY-MM"
         var monthLabel = Expressions.stringTemplate(
-                "to_char(date_trunc('month', {0}), 'YYYY-MM')", buildRun.startedAt);
+                "to_char(date_trunc('month', {0}), 'YYYY-MM')",
+                buildRun.startedAt
+        );
 
         // group key for ordering
         DateTemplate<LocalDateTime> monthKey = Expressions.dateTemplate(
-                LocalDateTime.class, "date_trunc('month', {0})", buildRun.startedAt);
+                LocalDateTime.class,
+                "date_trunc('month', {0})",
+                buildRun.startedAt
+        );
 
         return jpaQueryFactory
                 .select(Projections.constructor(
                         MonthlyTypeCountRow.class,
-                        stageRun.problemType.stringValue(),
-                        monthLabel,
-                        count(stageRun.id)
+                        stageRun.problemType.stringValue(), // problemType
+                        monthLabel,                          // "YYYY-MM"
+                        count(stageRun.id)                   // count
                 ))
                 .from(stageRun)
                 .join(stageRun.buildRun, buildRun)
                 .join(buildRun.deployment, deployment)
                 .where(
-                        deployment.project.id.eq(projectId),
+                        projectId != null ? deployment.project.id.eq(projectId) : null,
                         stageRun.isSuccess.isFalse(),
                         stageRun.problemType.isNotNull(),
                         betweenOrNull(buildRun.startedAt, from, to)
@@ -116,7 +125,8 @@ public class StatisticsRepositoryCustomImpl implements StatisticsRepositoryCusto
 
     private BooleanExpression betweenOrNull(
             DateTimePath<LocalDateTime> path,
-            LocalDateTime from, LocalDateTime to
+            LocalDateTime from,
+            LocalDateTime to
     ) {
         BooleanExpression ge = (from == null) ? null : path.goe(from);
         BooleanExpression lt = (to == null) ? null : path.lt(to);
@@ -241,7 +251,8 @@ public class StatisticsRepositoryCustomImpl implements StatisticsRepositoryCusto
     @Override
     public List<MonthBucket> findMonthlyDeploymentFinalStats(Long projectId) {
         NumberExpression<Integer> monthExpr =
-                Expressions.numberTemplate(Integer.class, "EXTRACT(MONTH FROM {0})", buildRun.endedAt);
+                Expressions.numberTemplate(Integer.class, "EXTRACT(MONTH FROM {0})",
+                        buildRun.endedAt);
 
         NumberExpression<Long> successCase = new CaseBuilder()
                 .when(deployment.isDeployed.isTrue()).then(1L).otherwise(0L);
@@ -254,7 +265,8 @@ public class StatisticsRepositoryCustomImpl implements StatisticsRepositoryCusto
                         .from(buildRun2)
                         .where(buildRun2.deployment.id.eq(deployment.id));
 
-        BooleanExpression projectFilter = (projectId == null) ? null : deployment.project.id.eq(projectId);
+        BooleanExpression projectFilter =
+                (projectId == null) ? null : deployment.project.id.eq(projectId);
 
         return jpaQueryFactory
                 .select(Projections.constructor(
@@ -280,7 +292,8 @@ public class StatisticsRepositoryCustomImpl implements StatisticsRepositoryCusto
     @Override
     public List<YearBucket> findYearlyDeploymentFinalStats(Long projectId) {
         NumberExpression<Integer> yearExpr =
-                Expressions.numberTemplate(Integer.class, "EXTRACT(YEAR FROM {0})", buildRun.endedAt);
+                Expressions.numberTemplate(Integer.class, "EXTRACT(YEAR FROM {0})",
+                        buildRun.endedAt);
 
         NumberExpression<Long> successCase = new CaseBuilder()
                 .when(deployment.isDeployed.isTrue()).then(1L).otherwise(0L);
@@ -293,7 +306,8 @@ public class StatisticsRepositoryCustomImpl implements StatisticsRepositoryCusto
                         .from(buildRun2)
                         .where(buildRun2.deployment.id.eq(deployment.id));
 
-        BooleanExpression projectFilter = (projectId == null) ? null : deployment.project.id.eq(projectId);
+        BooleanExpression projectFilter =
+                (projectId == null) ? null : deployment.project.id.eq(projectId);
 
         return jpaQueryFactory
                 .select(Projections.constructor(
