@@ -8,11 +8,12 @@ import lombok.Getter;
 @Getter
 public enum DeploymentType {
     DEPLOY("배포"),
+    REDEPLOY("재배포"),
+    ROLLBACK("복구"),
     EMERGENCY("긴급 배포"),
     BUILD("빌드"),
     TEST("테스트"),
-    DB_MIGRATION("DB 마이그레이션"),
-    ROLLBACK("롤백");
+    DB_MIGRATION("DB 마이그레이션");
 
     private final String koreanName;
 

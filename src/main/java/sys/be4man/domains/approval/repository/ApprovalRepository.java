@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import sys.be4man.domains.approval.model.entity.Approval;
 import sys.be4man.domains.approval.model.type.ApprovalStatus;
+import sys.be4man.domains.approval.model.type.ApprovalType;
 
 public interface ApprovalRepository extends JpaRepository<Approval, Long> {
 
@@ -47,4 +48,6 @@ public interface ApprovalRepository extends JpaRepository<Approval, Long> {
       where a.id = :id
     """)
     Optional<Approval> findByIdWithLines(@Param("id") Long id);
+
+    List<Approval> findByDeploymentIdAndTypeAndIsDeletedFalse(Long id, ApprovalType approvalType);
 }
