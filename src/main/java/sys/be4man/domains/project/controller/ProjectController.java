@@ -6,6 +6,7 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import sys.be4man.domains.project.dto.response.AccountProjectResponse;
 import sys.be4man.domains.project.dto.response.ProjectResponse;
 import sys.be4man.domains.project.service.ProjectService;
 
@@ -33,5 +34,12 @@ public class ProjectController {
     @GetMapping
     public ResponseEntity<List<ProjectResponse>> getAll() {
         return ResponseEntity.ok(projectService.getAll());
+    }
+
+    @Operation(summary = "계정이 속한 프로젝트 멤버십 목록(AccountProject)")
+    @GetMapping("/by-account/{accountId}")
+    public ResponseEntity<List<AccountProjectResponse>> getMembershipsByAccount(
+            @PathVariable Long accountId) {
+        return ResponseEntity.ok(projectService.getAccountProjectsByAccountId(accountId));
     }
 }

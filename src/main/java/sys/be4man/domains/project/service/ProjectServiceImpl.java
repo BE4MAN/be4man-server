@@ -5,8 +5,12 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import sys.be4man.domains.account.repository.AccountRepository;
+import sys.be4man.domains.project.dto.response.AccountProjectResponse;
 import sys.be4man.domains.project.dto.response.ProjectResponse;
+import sys.be4man.domains.project.model.entity.AccountProject;
 import sys.be4man.domains.project.model.entity.Project;
+import sys.be4man.domains.project.repository.AccountProjectRepository;
 import sys.be4man.domains.project.repository.ProjectRepository;
 
 @Service
@@ -15,6 +19,8 @@ import sys.be4man.domains.project.repository.ProjectRepository;
 public class ProjectServiceImpl implements ProjectService {
 
     private final ProjectRepository projectRepository;
+    private final AccountRepository accountRepository;
+    private final AccountProjectRepository accountProjectRepository;
 
     @Override
     public ProjectResponse getById(Long id) {
@@ -27,6 +33,23 @@ public class ProjectServiceImpl implements ProjectService {
     public List<ProjectResponse> getAll() {
         return projectRepository.findAll().stream()
                 .map(this::toResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<AccountProjectResponse> getAccountProjectsByAccountId(Long accountId) {
+        accountRepository.findById(accountId)
+                .orElseThrow(() -> new IllegalArgumentException("Account not found. id=" + accountId));
+
+        List<AccountProject> rows = accountProjectRepository.findAllByAccount_Id(accountId);
+
+        return rows.stream()
+                .map(ap -> AccountProjectResponse.builder()
+                        .accountProjectId(ap.getId())
+                        .accountId(ap.getAccount().getId())
+                        .projectId(ap.getProject().getId())
+                        .projectName(ap.getProject().getName())
+                        .build())
                 .collect(Collectors.toList());
     }
 

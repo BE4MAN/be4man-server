@@ -52,17 +52,17 @@ public interface ScheduleService {
      * Ban 등록 전 충돌 Deployment 조회
      * - 입력 폼이 모두 채워진 상태에서 충돌하는 Deployment 목록 조회
      */
-//    BanConflictCheckResponse checkBanConflicts(
-//            List<Long> projectIds,
-//            LocalDate startDate,
-//            LocalTime startTime,
-//            Integer durationHours,
-//            sys.be4man.domains.ban.model.type.RecurrenceType recurrenceType,
-//            sys.be4man.domains.ban.model.type.RecurrenceWeekday recurrenceWeekday,
-//            sys.be4man.domains.ban.model.type.RecurrenceWeekOfMonth recurrenceWeekOfMonth,
-//            LocalDate recurrenceEndDate,
-//            LocalDate queryStartDate,
-//            LocalDate queryEndDate
-//    );
+    BanConflictCheckResponse checkBanConflicts(
+            List<Long> projectIds,
+            LocalDate startDate,
+            LocalTime startTime,
+            Integer durationMinutes,
+            sys.be4man.domains.ban.model.type.RecurrenceType recurrenceType,
+            sys.be4man.domains.ban.model.type.RecurrenceWeekday recurrenceWeekday,
+            sys.be4man.domains.ban.model.type.RecurrenceWeekOfMonth recurrenceWeekOfMonth,
+            LocalDate recurrenceEndDate,
+            LocalDate queryStartDate,
+            LocalDate queryEndDate
+    );
 }
 

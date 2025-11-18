@@ -1,6 +1,7 @@
 package sys.be4man.domains.approval.repository;
 
 import java.util.List;
+import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -38,4 +39,12 @@ public interface ApprovalRepository extends JpaRepository<Approval, Long> {
             @Param("accountId") Long accountId,
             @Param("status") ApprovalStatus status
     );
+
+    @Query("""
+      select a
+      from Approval a
+      left join fetch a.approvalLines
+      where a.id = :id
+    """)
+    Optional<Approval> findByIdWithLines(@Param("id") Long id);
 }

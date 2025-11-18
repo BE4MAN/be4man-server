@@ -1,15 +1,18 @@
 package sys.be4man.domains.deployment.service;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
 import sys.be4man.domains.account.model.entity.Account;
 import sys.be4man.domains.account.repository.AccountRepository;
 import sys.be4man.domains.deployment.dto.request.DeploymentCreateRequest;
@@ -33,9 +36,11 @@ public class DeploymentServiceImpl implements DeploymentService {
     private final ProjectRepository projectRepository;
     private final AccountRepository accountRepository;
     private final PullRequestRepository pullRequestRepository;
-    private final DeploymentScheduler deploymentScheduler;
-    private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern(
-            "yyyy-MM-dd HH:mm");
+
+    private static final DateTimeFormatter YMDHM = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+    private static final Pattern RANGE = Pattern.compile(
+            "(20\\d{2}-\\d{2}-\\d{2})\\s+(\\d{2}:\\d{2})\\s*[~\\-–—]\\s*(20\\d{2}-\\d{2}-\\d{2})\\s+(\\d{2}:\\d{2})"
+    );
 
     @Override
     public DeploymentResponse createDeployment(DeploymentCreateRequest request) {
@@ -46,8 +51,7 @@ public class DeploymentServiceImpl implements DeploymentService {
         PullRequest pr = pullRequestRepository.findById(request.getPullRequestId())
                 .orElseThrow(() -> new IllegalArgumentException("PR 정보를 찾을 수 없습니다."));
 
-        LocalDateTime startTime = extractStartTime(request.getContent());
-        LocalDateTime now = LocalDateTime.now();
+        Schedule s = parseSchedule(request.getContent());
 
         Deployment deployment = Deployment.builder()
                 .project(project)
@@ -58,39 +62,74 @@ public class DeploymentServiceImpl implements DeploymentService {
                 .status(DeploymentStatus.valueOf(
                         request.getStatus() != null ? request.getStatus() : "PENDING"))
                 .isDeployed(false)
-                .expectedDuration(
-                        request.getExpectedDuration() != null ? request.getExpectedDuration() : "0")
+                .expectedDuration(String.valueOf(s.expectedMinutes))
                 .version(request.getVersion())
                 .content(request.getContent())
-                .scheduledAt(startTime != null ? startTime : now)
+                .scheduledAt(s.start != null ? s.start : LocalDateTime.now())
+                .scheduledToEndedAt(s.end)
                 .build();
 
         deploymentRepository.save(deployment);
 
-        try {
-            String webhookUrl = project.getJenkinsIp() + "/job/deploy/build?token=DEPLOY_TOKEN";
-            LocalDateTime scheduleTime = startTime != null ? startTime : now.plusMinutes(1);
-            deploymentScheduler.scheduleDeployment(webhookUrl, scheduleTime);
-            log.info("✅ Jenkins webhook scheduled for project {} at {}", project.getName(),
-                     scheduleTime);
-        } catch (Exception e) {
-            log.error("❌ Jenkins webhook scheduling failed: {}", e.getMessage());
-        }
+        log.info("📝 Deployment created id={}, scheduledAt={}, scheduledToEndedAt={}, expectedMinutes={}",
+                deployment.getId(), deployment.getScheduledAt(), deployment.getScheduledToEndedAt(), s.expectedMinutes);
 
         return toDto(deployment);
     }
 
-    private LocalDateTime extractStartTime(String content) {
-        try {
-            Pattern pattern = Pattern.compile("(\\d{4}-\\d{2}-\\d{2}\\s\\d{2}:\\d{2})");
-            Matcher matcher = pattern.matcher(content);
-            if (matcher.find()) {
-                return LocalDateTime.parse(matcher.group(1), FORMATTER);
-            }
-        } catch (Exception e) {
-            log.warn("⚠️ 배포 시작 시간 파싱 실패: {}", e.getMessage());
+    public String buildWebhookUrl(Project project) {
+        if (project == null || project.getJenkinsIp() == null) return null;
+        return project.getJenkinsIp() + "/job/deploy/build?token=DEPLOY_TOKEN";
+    }
+
+    private static class Schedule {
+        final LocalDateTime start;
+        final LocalDateTime end;
+        final long expectedMinutes;
+
+        Schedule(LocalDateTime s, LocalDateTime e) {
+            this.start = s;
+            this.end = e;
+            this.expectedMinutes = (s != null && e != null && !e.isBefore(s))
+                    ? Duration.between(s, e).toMinutes()
+                    : 0L;
         }
-        return null;
+    }
+
+    private Schedule parseSchedule(String content) {
+        if (content == null || content.isBlank()) return new Schedule(null, null);
+
+        String text = content
+                .replaceAll("(?is)<style[^>]*>.*?</style>", " ")
+                .replaceAll("(?is)<script[^>]*>.*?</script>", " ")
+                .replaceAll("(?is)<[^>]+>", " ")
+                .replace("&nbsp;", " ")
+                .replace("&ensp;", " ")
+                .replace("&emsp;", " ")
+                .replace("&ndash;", "-")
+                .replace("&minus;", "-")
+                .replace("&mdash;", "-")
+                .trim()
+                .replaceAll("\\s+", " ");
+
+        Matcher rm = RANGE.matcher(text);
+        if (rm.find()) {
+            try {
+                LocalDateTime s = LocalDateTime.parse(rm.group(1) + " " + rm.group(2), YMDHM);
+                LocalDateTime e = LocalDateTime.parse(rm.group(3) + " " + rm.group(4), YMDHM);
+                if (!e.isBefore(s)) return new Schedule(s, e);
+            } catch (Exception ignore) {}
+        }
+
+        try {
+            Matcher sm = Pattern.compile("(20\\d{2}-\\d{2}-\\d{2}\\s\\d{2}:\\d{2})").matcher(text);
+            if (sm.find()) {
+                LocalDateTime s = LocalDateTime.parse(sm.group(1), YMDHM);
+                return new Schedule(s, null);
+            }
+        } catch (Exception ignore) { }
+
+        return new Schedule(null, null);
     }
 
     @Override

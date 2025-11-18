@@ -4,6 +4,8 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -69,6 +71,7 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
 
                 // CORS 설정
+                .cors(Customizer.withDefaults())
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
 
                 // Form Login 비활성화 (JWT 사용)
@@ -104,6 +107,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                                                // 공개 경로: 인증 없이 접근 가능
                                                // TODO: 구현 후 WHITE_LIST 적용
+                                               .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                                                .anyRequest().permitAll()
 
                                        // 나머지 모든 요청은 인증 필요
@@ -120,14 +124,19 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
 
-        // 임시로 모든 도메인 허용. 추후에 특정 도메인만 허용
-        configuration.setAllowedOriginPatterns(List.of("*"));
+        // 프론트엔드 도메인 허용 (allowCredentials(true)와 함께 사용 시 구체적 도메인 필요)
+        configuration.setAllowedOrigins(List.of(
+                "https://be4man-client.vercel.app",
+                "http://localhost:5173",  // 로컬 개발 환경 (Vite 기본 포트)
+                "http://localhost:3000"   // 로컬 개발 환경 (대체 포트)
+        ));
         configuration.setAllowedMethods(
                 List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS")
         );
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true);
         configuration.setExposedHeaders(List.of("Authorization"));
+        configuration.setMaxAge(3600L); // Preflight 요청 캐시 시간 (1시간)
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
