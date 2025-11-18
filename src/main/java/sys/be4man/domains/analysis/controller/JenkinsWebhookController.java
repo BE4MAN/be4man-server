@@ -48,7 +48,7 @@ public class JenkinsWebhookController {
         webhookService.setDeployResult(jenkinsData, isDeployed);
 
         // 빌드 로그 조회와 DeploymentLog 저장은 비동기적으로 실행
-        logService.fetchAndSaveLogAsync(jenkinsData);
+        logService.fetchAndSaveLogAsync(jenkinsData, isDeployed);
 
         // 5. Jenkins에게 성공 응답 반환
         return ResponseEntity.ok("Jenkins webhook data received and processed successfully.");

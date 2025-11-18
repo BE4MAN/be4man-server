@@ -129,7 +129,7 @@ public class JenkinsLogServiceImpl implements LogService {
     @Async("webhookTaskExecutor")
     @Transactional
     @Override
-    public void fetchAndSaveLogAsync(JenkinsWebhooksResponseDto jenkinsData) {
+    public void fetchAndSaveLogAsync(JenkinsWebhooksResponseDto jenkinsData, boolean isDeployed) {
         final Long deploymentId = jenkinsData.deploymentId();
         final String jobName = jenkinsData.jobName();
         final String buildNumber = jenkinsData.buildNumber();
@@ -200,6 +200,7 @@ public class JenkinsLogServiceImpl implements LogService {
                     .startedAt(startedAt)
                     .endedAt(endedAt)
                     .log(fullLog)
+                    .isBuild(isDeployed)
                     .build();
             buildRunRepository.save(buildRun);
 

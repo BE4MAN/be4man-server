@@ -58,9 +58,12 @@ public class BuildRun extends BaseEntity {
     @Column(name = "ended_at", nullable = false)
     private LocalDateTime endedAt;
 
+    @Column(name="is_build", nullable = false)
+    private Boolean isBuild = Boolean.FALSE;
+
     @Builder
     public BuildRun(Deployment deployment, String jenkinsJobName, Long buildNumber,
-            String log, Long duration, LocalDateTime startedAt, LocalDateTime endedAt) {
+            String log, Long duration, LocalDateTime startedAt, LocalDateTime endedAt, Boolean isBuild) {
         this.deployment = deployment;
         this.jenkinsJobName = jenkinsJobName;
         this.buildNumber = buildNumber;
@@ -68,6 +71,7 @@ public class BuildRun extends BaseEntity {
         this.duration = duration;
         this.startedAt = startedAt;
         this.endedAt = endedAt;
+        this.isBuild = isBuild;
     }
 
     /**

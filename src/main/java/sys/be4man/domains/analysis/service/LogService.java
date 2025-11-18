@@ -12,6 +12,6 @@ public interface LogService {
      */
     String fetchConsoleLog(String jobName, String buildNumber);
 
-    void fetchAndSaveLogAsync(JenkinsWebhooksResponseDto jenkinsData);
+    void fetchAndSaveLogAsync(JenkinsWebhooksResponseDto jenkinsData, boolean isDeployed);
 
 }
