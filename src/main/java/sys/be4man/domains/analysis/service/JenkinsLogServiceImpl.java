@@ -152,7 +152,7 @@ public class JenkinsLogServiceImpl implements LogService {
                 BuildMeta meta = fetchBuildMeta(jobName, buildNumber);
                 if (meta != null && !meta.building) {
 
-                    Boolean isDeployed = DeploymentResult.fromJenkinsStatus(jenkinsData.result())
+                    Boolean isDeployed = DeploymentResult.fromJenkinsStatus(meta.result)
                             .getIsDeployed();
                     webhookService.setDeployResult(jenkinsData, isDeployed);
 
