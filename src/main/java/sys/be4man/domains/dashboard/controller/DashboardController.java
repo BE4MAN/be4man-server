@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import sys.be4man.domains.auth.dto.AccountPrincipal;
+import sys.be4man.domains.dashboard.dto.response.InProgressTaskResponse;
 import sys.be4man.domains.dashboard.dto.response.PendingApprovalResponse;
 import sys.be4man.domains.dashboard.service.DashboardService;
 import sys.be4man.global.dto.response.ErrorResponse;
@@ -52,8 +53,25 @@ public class DashboardController {
         return ResponseEntity.ok(response);
     }
 
-    // TODO: Step 3에서 진행중인 업무 목록 조회 API 구현 예정
-    // GET /api/dashboard/in-progress-tasks
+    /**
+     * 진행중인 업무 목록 조회
+     */
+    @Operation(summary = "진행중인 업무 목록 조회", description = "현재 사용자가 승인한 deployment 중, 진행중인 상태인 항목을 조회합니다.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "조회 성공",
+                    content = @Content(schema = @Schema(implementation = InProgressTaskResponse.class))),
+            @ApiResponse(responseCode = "401", description = "인증되지 않은 사용자",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    @SecurityRequirement(name = "Bearer Authentication")
+    @GetMapping("/in-progress-tasks")
+    public ResponseEntity<List<InProgressTaskResponse>> getInProgressTasks(
+            @AuthenticationPrincipal AccountPrincipal principal
+    ) {
+        log.info("진행중인 업무 목록 조회 요청 - accountId: {}", principal.accountId());
+        List<InProgressTaskResponse> response = dashboardService.getInProgressTasks(principal.accountId());
+        return ResponseEntity.ok(response);
+    }
 
     // TODO: Step 4에서 알림 목록 조회 API 구현 예정
     // GET /api/dashboard/notifications

@@ -13,6 +13,7 @@ import sys.be4man.domains.approval.model.entity.ApprovalLine;
 import sys.be4man.domains.approval.model.type.ApprovalType;
 import sys.be4man.domains.approval.repository.ApprovalLineRepository;
 import sys.be4man.domains.dashboard.dto.response.DeploymentInfoResponse;
+import sys.be4man.domains.dashboard.dto.response.InProgressTaskResponse;
 import sys.be4man.domains.dashboard.dto.response.PendingApprovalResponse;
 import sys.be4man.domains.dashboard.dto.response.RelatedServiceResponse;
 import sys.be4man.domains.deployment.model.entity.Deployment;
@@ -182,14 +183,63 @@ public class DashboardServiceImpl implements DashboardService {
         };
     }
 
-    // TODO: Step 3에서 진행중인 업무 목록 조회 메서드 구현 예정
-    // @Override
-    // @Transactional(readOnly = true)
-    // public List<InProgressTaskResponse> getInProgressTasks(Long accountId) {
-    //     log.info("진행중인 업무 목록 조회 - accountId: {}", accountId);
-    //     // 구현 예정
-    //     return List.of();
-    // }
+    @Override
+    @Transactional(readOnly = true)
+    public List<InProgressTaskResponse> getInProgressTasks(Long accountId) {
+        log.info("진행중인 업무 목록 조회 - accountId: {}", accountId);
+
+        List<Deployment> deployments = approvalLineRepository.findInProgressTasksByAccountId(accountId);
+
+        if (deployments.isEmpty()) {
+            return List.of();
+        }
+
+        // N+1 쿼리 방지를 위한 배치 조회: 각 Deployment의 project_id로 관련 프로젝트 조회
+        List<Long> projectIds = deployments.stream()
+                .map(deployment -> deployment.getProject().getId())
+                .distinct()
+                .toList();
+
+        Map<Long, List<RelatedProject>> projectRelatedServicesMap = buildProjectRelatedServicesMap(projectIds);
+
+        return deployments.stream()
+                .map(deployment -> {
+                    Project project = deployment.getProject();
+
+                    // 관련 서비스 목록 조회
+                    List<RelatedProject> relatedProjects = projectRelatedServicesMap.getOrDefault(
+                            project.getId(), List.of());
+
+                    // 서비스 이름 배열 (메인 프로젝트 + 관련 프로젝트)
+                    List<String> serviceNames = new ArrayList<>();
+                    serviceNames.add(project.getName());
+                    serviceNames.addAll(relatedProjects.stream()
+                            .map(rp -> rp.getRelatedProject().getName())
+                            .toList());
+
+                    return new InProgressTaskResponse(
+                            deployment.getId(),
+                            deployment.getTitle(),
+                            deployment.getScheduledAt() != null
+                                    ? deployment.getScheduledAt().toLocalDate()
+                                    : null,
+                            deployment.getScheduledAt() != null
+                                    ? deployment.getScheduledAt().toLocalTime()
+                                    : null,
+                            deployment.getStatus().name(),
+                            deployment.getStage().name(),
+                            deployment.getIsDeployed(),
+                            project.getName(),
+                            deployment.getIssuer().getName(),
+                            deployment.getIssuer().getDepartment() != null
+                                    ? deployment.getIssuer().getDepartment().name()
+                                    : null,
+                            deployment.getContent(),
+                            serviceNames
+                    );
+                })
+                .toList();
+    }
 
     // TODO: Step 4에서 알림 목록 조회 메서드 구현 예정
     // @Override

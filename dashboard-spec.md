@@ -133,9 +133,7 @@
       "registrant": "김민호",
       "registrantDepartment": "DevOps팀",
       "description": "승인은 완료되었고, 배포 시간까지 대기 중입니다.",
-      "relatedServices": ["사용자 서비스", "인증 서비스"],
-      "progress": 65,
-      "file": "user-service-deploy-plan.pdf"
+      "relatedServices": ["사용자 서비스", "인증 서비스"]
     }
   ]
 }
@@ -157,8 +155,6 @@
 | `registrantDepartment` | string  | 필수 | 등록 부서명                                                     |
 | `description`          | string  | 선택 | 설명                                                            |
 | `relatedServices`      | array   | 필수 | 연관 서비스 이름 배열                                           |
-| `progress`             | integer | 선택 | 진행률 (0-100)                                                  |
-| `file`                 | string  | 선택 | 첨부 파일명                                                     |
 
 #### 필터 조건
 
@@ -166,8 +162,7 @@
 - 다음 stage-status 조합 중 하나:
   - `deployment.stage = 'PLAN'` AND `deployment.status = 'APPROVED'`
   - `deployment.stage = 'DEPLOYMENT'` AND `deployment.status = 'PENDING'`
-  - `deployment.stage = 'DEPLOYMENT'` AND `deployment.status = 'IN_PROGRESS'`
-- 최신순 정렬 (`updatedAt DESC` 또는 `created DESC`)
+- 최신순 정렬 (`deployment.updatedAt DESC`)
 
 ---
 
