@@ -17,11 +17,10 @@ import sys.be4man.domains.pullrequest.repository.PullRequestRepository;
 public class PullRequestServiceImpl implements PullRequestService {
 
     private final PullRequestRepository repository;
-
     @Override
     @Transactional(readOnly = true)
     public List<PullRequestResponse> getAllByGithubId(Long githubId) {
-        return repository.findByGithubId(githubId).stream()
+        return repository.findLatestPerRepoBranchByGithubId(githubId).stream()
                 .map(this::toDto)
                 .collect(Collectors.toList());
     }
