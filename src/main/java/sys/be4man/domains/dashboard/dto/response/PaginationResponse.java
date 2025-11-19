@@ -1,33 +1,31 @@
 package sys.be4man.domains.dashboard.dto.response;
 
+import java.util.List;
+
 /**
- * 페이지네이션 정보 응답 DTO
+ * 페이지네이션 정보가 포함된 응답 DTO
  *
- * @param total      전체 항목 수
- * @param page       현재 페이지 번호 (1부터 시작)
- * @param pageSize   페이지당 항목 수
- * @param totalPages 전체 페이지 수
+ * @param data       데이터 목록
+ * @param pagination 페이지네이션 정보
  */
-public record PaginationResponse(
-        long total,
-        int page,
-        int pageSize,
-        int totalPages
+public record PaginationResponse<T>(
+        List<T> data,
+        PaginationInfo pagination
 ) {
     /**
-     * 전체 항목 수와 페이지 정보로부터 PaginationResponse 생성
+     * 페이지네이션 정보
      *
-     * @param total    전체 항목 수
-     * @param page     현재 페이지 번호
-     * @param pageSize 페이지당 항목 수
-     * @return PaginationResponse
+     * @param total      전체 항목 수
+     * @param page       현재 페이지 번호
+     * @param pageSize   페이지당 항목 수
+     * @param totalPages 전체 페이지 수
      */
-    public static PaginationResponse of(long total, int page, int pageSize) {
-        int totalPages = (int) Math.ceil((double) total / pageSize);
-        return new PaginationResponse(total, page, pageSize, totalPages);
+    public record PaginationInfo(
+            long total,
+            int page,
+            int pageSize,
+            int totalPages
+    ) {
     }
 }
-
-
-
 

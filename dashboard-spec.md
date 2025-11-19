@@ -305,7 +305,7 @@
 
 #### 기능
 
-`status`가 `'ROLLBACK'`인 deployment 리스트를 조회합니다.
+`approval.type = 'ROLLBACK'`인 Approval과 연결된 deployment 리스트를 조회합니다.
 
 #### Query Parameters
 
@@ -320,17 +320,37 @@
 {
   "data": [
     {
-      "id": 1,
+      "id": 201,
       "title": "결제 서비스 DB 마이그레이션 작업",
       "service": "결제 서비스",
-      "cause": "DB 마이그레이션 실패",
       "status": "COMPLETED",
       "duration": "42분",
-      "failedAt": "2025-10-29T15:22:00",
       "recoveredAt": "2025-10-29T16:04:00",
       "registrant": "홍길동",
-      "registrantDepartment": "DevOps팀",
+      "registrantDepartment": "IT",
       "deploymentId": 201
+    },
+    {
+      "id": 202,
+      "title": "진행중인 복구 작업",
+      "service": "결제 서비스",
+      "status": "IN_PROGRESS",
+      "duration": null,
+      "recoveredAt": null,
+      "registrant": "홍길동",
+      "registrantDepartment": "IT",
+      "deploymentId": 202
+    },
+    {
+      "id": 203,
+      "title": "대기중인 복구 작업",
+      "service": "결제 서비스",
+      "status": "PENDING",
+      "duration": null,
+      "recoveredAt": null,
+      "registrant": "홍길동",
+      "registrantDepartment": "IT",
+      "deploymentId": 203
     }
   ],
   "pagination": {
@@ -344,33 +364,39 @@
 
 #### Response 필드 설명
 
-| 필드                   | 타입     | 필수 | 설명                                                                |
-| ---------------------- | -------- | ---- | ------------------------------------------------------------------- |
-| `id`                   | integer  | 필수 | 복구현황 고유 ID (deployment ID 사용 가능)                          |
-| `title`                | string   | 필수 | 배포작업명 (deployment.title)                                       |
-| `service`              | string   | 필수 | 서비스명 (deployment.projectName)                                   |
-| `cause`                | string   | 필수 | 복구 사유 (deployment.rollbackReason 또는 description)              |
-| `status`               | enum     | 필수 | 복구 상태 (`PENDING`, `IN_PROGRESS`, `COMPLETED`)                   |
-| `duration`             | string   | 선택 | 소요시간 (예: "42분") - status가 `COMPLETED`일 때만 제공            |
-| `failedAt`             | datetime | 필수 | 실패 발생 시각 (ISO 8601 형식, deployment.rollbackAt 또는 failedAt) |
-| `recoveredAt`          | datetime | 선택 | 복구 완료 시각 (ISO 8601 형식) - status가 `COMPLETED`일 때만 제공   |
-| `registrant`           | string   | 필수 | 등록자 이름 (deployment.registrant)                                 |
-| `registrantDepartment` | string   | 필수 | 등록 부서명 (deployment.registrantDepartment)                       |
-| `deploymentId`         | integer  | 필수 | 원본 Deployment ID                                                  |
+| 필드                   | 타입     | 필수 | 설명                                                                                    |
+| ---------------------- | -------- | ---- | --------------------------------------------------------------------------------------- |
+| `id`                   | integer  | 필수 | 복구현황 고유 ID (deployment ID)                                                        |
+| `title`                | string   | 필수 | 배포작업명 (deployment.title)                                                           |
+| `service`              | string   | 필수 | 서비스명 (deployment.project.name)                                                      |
+| `status`               | enum     | 필수 | 복구 상태 (`PENDING`, `IN_PROGRESS`, `COMPLETED`)                                      |
+| `duration`             | string   | 선택 | 소요시간 (예: "42분") - status가 `COMPLETED`이고 BuildRun이 존재할 때만 제공            |
+| `recoveredAt`          | datetime | 선택 | 복구 완료 시각 (ISO 8601 형식) - status가 `COMPLETED`이고 BuildRun이 존재할 때만 제공    |
+| `registrant`           | string   | 필수 | 등록자 이름 (deployment.issuer.name)                                                    |
+| `registrantDepartment` | string   | 필수 | 등록 부서명 (deployment.issuer.department.koreanName)                                   |
+| `deploymentId`         | integer  | 필수 | 원본 Deployment ID                                                                      |
 
 #### 필터 조건
 
-- `deployment.status = 'ROLLBACK'` 또는 `deployment.stage = 'ROLLBACK'`
-- 정렬: `created DESC` (최신순, created 필드 기준)
+- `approval.type = 'ROLLBACK'`
+- `approval.isDeleted = false` AND `deployment.isDeleted = false`
+- 정렬: `deployment.createdAt DESC` (최신순)
 - 페이지네이션: 기본 `pageSize = 5`, `page` 파라미터로 페이지 번호 지정
 
 #### 상태값 결정 로직
 
 복구 상태(`status`)는 deployment의 현재 상태에 따라 결정됩니다:
 
-- `PENDING`: 복구 작업이 아직 시작되지 않음 (deployment.status가 ROLLBACK이고 추가 복구 작업이 없는 경우)
-- `IN_PROGRESS`: 복구 작업이 진행 중 (복구 관련 추가 작업이 진행 중인 경우)
-- `COMPLETED`: 복구 작업 완료 (복구 완료 시각이 있는 경우)
+- `COMPLETED`: `deployment.status = 'COMPLETED'` 또는 `deployment.isDeployed = true`
+- `IN_PROGRESS`: `deployment.status = 'IN_PROGRESS'`
+- `PENDING`: 그 외 (기본값)
+
+#### duration 및 recoveredAt 계산 로직
+
+- `status`가 `COMPLETED`이고 해당 deployment의 BuildRun이 존재하는 경우에만 계산됩니다.
+- `duration`: 첫 번째 BuildRun.startedAt ~ 마지막 BuildRun.endedAt의 차이를 분 단위로 계산 (예: "42분")
+- `recoveredAt`: 마지막 BuildRun.endedAt 사용
+- `status`가 `COMPLETED`가 아니거나 BuildRun이 없는 경우, `duration`과 `recoveredAt`은 `null`입니다.
 
 ---
 
@@ -433,4 +459,31 @@
 1. **승인 대기**: `approval_line` 테이블에서 현재 사용자가 다음 승인자로 지정되어 있고 아직 승인하지 않은 항목만 조회합니다.
 2. **진행중인 업무**: 현재 사용자가 승인한 deployment 중, 아직 완료되지 않은 항목을 조회합니다.
 3. **알림**: 알림 테이블이 없으므로 deployment의 상태 변경 이력을 기반으로 알림을 생성합니다.
-4. **복구현황**: `status`가 `'ROLLBACK'`인 deployment를 조회하며, 복구 상태는 별도로 관리될 수 있습니다.
+4. **복구현황**: `approval.type = 'ROLLBACK'`인 Approval과 연결된 deployment를 조회합니다. 복구 상태는 deployment의 현재 상태에 따라 결정됩니다.
+
+---
+
+## API 엔드포인트 요약
+
+### 상단 3개 섹션
+
+| 엔드포인트                          | 메서드 | 설명                 | 페이지네이션 |
+| ----------------------------------- | ------ | -------------------- | ------------ |
+| `/api/dashboard/pending-approvals`  | GET    | 승인 대기 목록 조회   | 없음         |
+| `/api/dashboard/in-progress-tasks`  | GET    | 진행중인 업무 목록 조회 | 없음         |
+| `/api/dashboard/notifications`      | GET    | 알림 목록 조회       | 없음         |
+
+### 복구현황 섹션
+
+| 엔드포인트              | 메서드 | 설명             | 페이지네이션 |
+| ----------------------- | ------ | ---------------- | ------------ |
+| `/api/dashboard/recovery` | GET    | 복구현황 목록 조회 | 있음 (기본 5개) |
+
+### 주간 캘린더 섹션
+
+| 엔드포인트                    | 메서드 | 설명                   | 페이지네이션 |
+| ----------------------------- | ------ | ---------------------- | ------------ |
+| `/api/schedules/deployments`  | GET    | 배포 작업 목록 조회     | 없음         |
+| `/api/schedules/bans`         | GET    | 작업 금지 기간 목록 조회 | 없음         |
+
+**참고**: 공휴일은 프론트엔드에서 공공데이터 포털 API를 직접 호출합니다.

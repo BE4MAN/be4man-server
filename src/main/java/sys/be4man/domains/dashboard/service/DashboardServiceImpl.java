@@ -10,6 +10,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import java.time.Duration;
+import sys.be4man.domains.analysis.model.entity.BuildRun;
+import sys.be4man.domains.analysis.repository.BuildRunRepository;
 import sys.be4man.domains.approval.model.entity.Approval;
 import sys.be4man.domains.approval.model.entity.ApprovalLine;
 import sys.be4man.domains.approval.model.type.ApprovalType;
@@ -18,8 +21,11 @@ import sys.be4man.domains.approval.repository.ApprovalRepository;
 import sys.be4man.domains.dashboard.dto.response.DeploymentInfoResponse;
 import sys.be4man.domains.dashboard.dto.response.InProgressTaskResponse;
 import sys.be4man.domains.dashboard.dto.response.NotificationResponse;
+import sys.be4man.domains.dashboard.dto.response.PaginationResponse;
 import sys.be4man.domains.dashboard.dto.response.PendingApprovalResponse;
+import sys.be4man.domains.dashboard.dto.response.RecoveryResponse;
 import sys.be4man.domains.dashboard.dto.response.RelatedServiceResponse;
+import sys.be4man.domains.deployment.model.type.DeploymentStatus;
 import sys.be4man.domains.deployment.model.entity.Deployment;
 import sys.be4man.domains.project.model.entity.Project;
 import sys.be4man.domains.project.model.entity.RelatedProject;
@@ -35,6 +41,7 @@ public class DashboardServiceImpl implements DashboardService {
 
     private final ApprovalLineRepository approvalLineRepository;
     private final ApprovalRepository approvalRepository;
+    private final BuildRunRepository buildRunRepository;
     private final RelatedProjectRepository relatedProjectRepository;
 
     @Override
@@ -386,13 +393,95 @@ public class DashboardServiceImpl implements DashboardService {
         return rejectionReasonMap;
     }
 
-    // TODO: Step 5에서 복구현황 목록 조회 메서드 구현 예정
-    // @Override
-    // @Transactional(readOnly = true)
-    // public PageResponse<RecoveryResponse> getRecovery(int page, int pageSize) {
-    //     log.info("복구현황 목록 조회 - page: {}, pageSize: {}", page, pageSize);
-    //     // 구현 예정
-    //     return new PageResponse<>(List.of(), new PaginationResponse(0, page, pageSize, 0));
-    // }
+    @Override
+    @Transactional(readOnly = true)
+    public PaginationResponse<RecoveryResponse> getRecovery(int page, int pageSize) {
+        log.info("복구현황 목록 조회 - page: {}, pageSize: {}", page, pageSize);
+
+        // 페이지네이션 계산
+        int offset = (page - 1) * pageSize;
+        long total = approvalRepository.countRollbackDeployments();
+        int totalPages = (int) Math.ceil((double) total / pageSize);
+
+        // 복구현황 Deployment 목록 조회
+        List<Deployment> deployments = approvalRepository.findRollbackDeployments(offset, pageSize);
+
+        // N+1 쿼리 방지를 위한 배치 조회: BuildRun 조회
+        List<Long> deploymentIds = deployments.stream()
+                .map(Deployment::getId)
+                .toList();
+
+        Map<Long, List<BuildRun>> buildRunsMap = buildRunRepository.findByDeploymentIdIn(deploymentIds)
+                .stream()
+                .collect(Collectors.groupingBy(br -> br.getDeployment().getId()));
+
+        // DTO 변환
+        List<RecoveryResponse> recoveryList = deployments.stream()
+                .map(deployment -> {
+                    String status = determineRecoveryStatus(deployment);
+                    List<BuildRun> buildRuns = buildRunsMap.getOrDefault(deployment.getId(), List.of());
+
+                    String duration = null;
+                    LocalDateTime recoveredAt = null;
+
+                    if ("COMPLETED".equals(status) && !buildRuns.isEmpty()) {
+                        // duration 계산: 첫 번째 buildRun.startedAt ~ 마지막 buildRun.endedAt
+                        BuildRun firstBuildRun = buildRuns.stream()
+                                .min((a, b) -> a.getStartedAt().compareTo(b.getStartedAt()))
+                                .orElse(null);
+
+                        BuildRun lastBuildRun = buildRuns.stream()
+                                .max((a, b) -> a.getEndedAt().compareTo(b.getEndedAt()))
+                                .orElse(null);
+
+                        if (firstBuildRun != null && lastBuildRun != null) {
+                            Duration durationBetween = Duration.between(
+                                    firstBuildRun.getStartedAt(),
+                                    lastBuildRun.getEndedAt()
+                            );
+                            long minutes = durationBetween.toMinutes();
+                            duration = minutes + "분";
+
+                            // recoveredAt: 마지막 buildRun.endedAt
+                            recoveredAt = lastBuildRun.getEndedAt();
+                        }
+                    }
+
+                    return new RecoveryResponse(
+                            deployment.getId(),
+                            deployment.getTitle(),
+                            deployment.getProject().getName(),
+                            status,
+                            duration,
+                            recoveredAt,
+                            deployment.getIssuer().getName(),
+                            deployment.getIssuer().getDepartment().getKoreanName(),
+                            deployment.getId()
+                    );
+                })
+                .toList();
+
+        return new PaginationResponse<>(
+                recoveryList,
+                new PaginationResponse.PaginationInfo(total, page, pageSize, totalPages)
+        );
+    }
+
+    /**
+     * 복구 상태 결정
+     * - COMPLETED: deployment.status = 'COMPLETED' 또는 deployment.isDeployed = true
+     * - IN_PROGRESS: deployment.status = 'IN_PROGRESS'
+     * - PENDING: 그 외 (기본값)
+     */
+    private String determineRecoveryStatus(Deployment deployment) {
+        if (deployment.getStatus() == DeploymentStatus.COMPLETED
+                || Boolean.TRUE.equals(deployment.getIsDeployed())) {
+            return "COMPLETED";
+        } else if (deployment.getStatus() == DeploymentStatus.IN_PROGRESS) {
+            return "IN_PROGRESS";
+        } else {
+            return "PENDING";
+        }
+    }
 }
 

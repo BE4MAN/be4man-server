@@ -8,7 +8,7 @@ import org.springframework.data.repository.query.Param;
 import sys.be4man.domains.approval.model.entity.Approval;
 import sys.be4man.domains.approval.model.type.ApprovalStatus;
 
-public interface ApprovalRepository extends JpaRepository<Approval, Long> {
+public interface ApprovalRepository extends JpaRepository<Approval, Long>, ApprovalRepositoryCustom {
 
     List<Approval> findByAccountId(Long accountId);
     List<Approval> findByAccountIdAndStatus(Long accountId, ApprovalStatus status);

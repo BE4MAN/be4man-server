@@ -15,10 +15,13 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.RequestParam;
 import sys.be4man.domains.auth.dto.AccountPrincipal;
 import sys.be4man.domains.dashboard.dto.response.InProgressTaskResponse;
 import sys.be4man.domains.dashboard.dto.response.NotificationResponse;
+import sys.be4man.domains.dashboard.dto.response.PaginationResponse;
 import sys.be4man.domains.dashboard.dto.response.PendingApprovalResponse;
+import sys.be4man.domains.dashboard.dto.response.RecoveryResponse;
 import sys.be4man.domains.dashboard.service.DashboardService;
 import sys.be4man.global.dto.response.ErrorResponse;
 
@@ -94,7 +97,26 @@ public class DashboardController {
         return ResponseEntity.ok(response);
     }
 
-    // TODO: Step 5에서 복구현황 목록 조회 API 구현 예정
-    // GET /api/dashboard/recovery
+    /**
+     * 복구현황 목록 조회
+     */
+    @Operation(summary = "복구현황 목록 조회", description = "ROLLBACK 타입 Approval의 Deployment 목록을 페이지네이션으로 조회합니다.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "조회 성공",
+                    content = @Content(schema = @Schema(implementation = PaginationResponse.class))),
+            @ApiResponse(responseCode = "401", description = "인증되지 않은 사용자",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    @SecurityRequirement(name = "Bearer Authentication")
+    @GetMapping("/recovery")
+    public ResponseEntity<PaginationResponse<RecoveryResponse>> getRecovery(
+            @AuthenticationPrincipal AccountPrincipal principal,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "5") int pageSize
+    ) {
+        log.info("복구현황 목록 조회 요청 - accountId: {}, page: {}, pageSize: {}", principal.accountId(), page, pageSize);
+        PaginationResponse<RecoveryResponse> response = dashboardService.getRecovery(page, pageSize);
+        return ResponseEntity.ok(response);
+    }
 }
 
