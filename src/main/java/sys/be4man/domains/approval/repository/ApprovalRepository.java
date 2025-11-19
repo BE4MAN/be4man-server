@@ -47,4 +47,9 @@ public interface ApprovalRepository extends JpaRepository<Approval, Long> {
       where a.id = :id
     """)
     Optional<Approval> findByIdWithLines(@Param("id") Long id);
+
+    /**
+     * Deployment ID로 Approval 조회
+     */
+    List<Approval> findByDeploymentId(Long deploymentId);
 }

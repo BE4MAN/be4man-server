@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import sys.be4man.domains.auth.dto.AccountPrincipal;
 import sys.be4man.domains.dashboard.dto.response.InProgressTaskResponse;
+import sys.be4man.domains.dashboard.dto.response.NotificationResponse;
 import sys.be4man.domains.dashboard.dto.response.PendingApprovalResponse;
 import sys.be4man.domains.dashboard.service.DashboardService;
 import sys.be4man.global.dto.response.ErrorResponse;
@@ -73,8 +74,25 @@ public class DashboardController {
         return ResponseEntity.ok(response);
     }
 
-    // TODO: Step 4에서 알림 목록 조회 API 구현 예정
-    // GET /api/dashboard/notifications
+    /**
+     * 알림 목록 조회
+     */
+    @Operation(summary = "알림 목록 조회", description = "현재 사용자와 관련된 취소 및 반려 알림을 조회합니다.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "조회 성공",
+                    content = @Content(schema = @Schema(implementation = NotificationResponse.class))),
+            @ApiResponse(responseCode = "401", description = "인증되지 않은 사용자",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    @SecurityRequirement(name = "Bearer Authentication")
+    @GetMapping("/notifications")
+    public ResponseEntity<List<NotificationResponse>> getNotifications(
+            @AuthenticationPrincipal AccountPrincipal principal
+    ) {
+        log.info("알림 목록 조회 요청 - accountId: {}", principal.accountId());
+        List<NotificationResponse> response = dashboardService.getNotifications(principal.accountId());
+        return ResponseEntity.ok(response);
+    }
 
     // TODO: Step 5에서 복구현황 목록 조회 API 구현 예정
     // GET /api/dashboard/recovery

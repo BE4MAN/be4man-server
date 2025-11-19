@@ -188,10 +188,8 @@
       "kind": "취소",
       "reason": "작업 금지 기간에 해당되어 자동 취소되었습니다.",
       "serviceName": "결제 서비스",
-      "when": "2025-10-27T11:00:00",
       "deploymentId": 101,
       "deploymentTitle": "결제 서비스 배포 작업",
-      "canceledBy": "시스템",
       "canceledAt": "2025-10-27T11:00:00"
     },
     {
@@ -199,12 +197,9 @@
       "kind": "반려",
       "reason": "모니터링 계획이 부족하여 팀장에 의해 반려되었습니다.",
       "serviceName": "알림 서비스",
-      "when": "2025-10-28T16:20:00",
       "deploymentId": 102,
       "deploymentTitle": "알림 서비스 배포 작업",
-      "rejectedBy": "팀장 이수민",
-      "rejectedAt": "2025-10-28T16:20:00",
-      "rejectedReason": "모니터링 계획이 부족하여 팀장에 의해 반려되었습니다."
+      "rejectedAt": "2025-10-28T16:20:00"
     }
   ]
 }
@@ -216,16 +211,12 @@
 | ----------------- | -------- | ---- | ---------------------------------------------------------- |
 | `id`              | integer  | 필수 | Deployment ID (알림 고유 ID가 없으므로 deployment ID 사용) |
 | `kind`            | enum     | 필수 | 알림 종류 (`취소`, `반려`)                                 |
-| `reason`          | string   | 필수 | 사유 (취소/반려 사유)                                      |
+| `reason`          | string   | 필수 | 사유 (취소/반려 사유, 반려의 경우 ApprovalLine.comment)    |
 | `serviceName`     | string   | 필수 | 서비스 이름 (deployment.projectName)                       |
-| `when`            | datetime | 필수 | 발생 시각 (ISO 8601 형식, canceledAt 또는 rejectedAt)      |
 | `deploymentId`    | integer  | 필수 | Deployment ID                                              |
 | `deploymentTitle` | string   | 필수 | 배포 제목                                                  |
-| `canceledBy`      | string   | 선택 | 취소한 사람 (kind가 '취소'일 때만 제공)                    |
-| `canceledAt`      | datetime | 선택 | 취소 시각 (kind가 '취소'일 때만 제공)                      |
-| `rejectedBy`      | string   | 선택 | 반려한 사람 (kind가 '반려'일 때만 제공)                    |
-| `rejectedAt`      | datetime | 선택 | 반려 시각 (kind가 '반려'일 때만 제공)                      |
-| `rejectedReason`  | string   | 선택 | 반려 사유 (kind가 '반려'일 때만 제공)                      |
+| `canceledAt`      | datetime | 선택 | 취소 시각 (kind가 '취소'일 때만 제공, deployment.updatedAt) |
+| `rejectedAt`      | datetime | 선택 | 반려 시각 (kind가 '반려'일 때만 제공, deployment.updatedAt 또는 approval.updatedAt) |
 
 #### 필터 조건
 
@@ -238,17 +229,14 @@
 
 **"반려" 알림:**
 
-- 다음 세 가지 경우:
+- 다음 두 가지 경우:
   1. 현재 사용자가 요청한 deployment가 반려된 경우:
      - `deployment.status = 'REJECTED'`
-     - `deployment.registrantId = current_user_id`
-  2. 현재 사용자가 승인한 deployment가 다른 사람에게 반려된 경우:
-     - `deployment.status = 'REJECTED'`
-     - `approval_line`에서 현재 사용자가 승인한 항목 (`is_approved = true`)
-     - `rejectedAt`이 현재 사용자의 `approvedAt`보다 이후
-  3. 현재 사용자가 승인한 approval(deployment)이 다른 사람에 의해 반려된 경우:
+     - `deployment.issuer.id = current_user_id`
+  2. 현재 사용자가 승인한 approval(deployment)이 다른 사람에 의해 반려된 경우:
      - `deployment.status = 'REJECTED'` 또는 `approval.status = 'REJECTED'`
      - `approval_line`에서 현재 사용자가 승인한 항목 (`is_approved = true`)
+     - 해당 approval의 approval_lines 중 `is_approved = false`인 항목이 존재
      - 반려 시각이 현재 사용자의 승인 시각보다 이후
 - `rejectedAt` 또는 `updatedAt` 기준 최신순 정렬
 

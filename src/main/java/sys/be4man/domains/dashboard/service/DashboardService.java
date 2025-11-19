@@ -2,6 +2,7 @@ package sys.be4man.domains.dashboard.service;
 
 import java.util.List;
 import sys.be4man.domains.dashboard.dto.response.InProgressTaskResponse;
+import sys.be4man.domains.dashboard.dto.response.NotificationResponse;
 import sys.be4man.domains.dashboard.dto.response.PendingApprovalResponse;
 
 /**
@@ -25,8 +26,13 @@ public interface DashboardService {
      */
     List<InProgressTaskResponse> getInProgressTasks(Long accountId);
 
-    // TODO: Step 4에서 알림 목록 조회 메서드 구현 예정
-    // List<NotificationResponse> getNotifications(Long accountId);
+    /**
+     * 알림 목록 조회
+     *
+     * @param accountId 현재 사용자 ID
+     * @return 알림 목록 (취소 + 반려)
+     */
+    List<NotificationResponse> getNotifications(Long accountId);
 
     // TODO: Step 5에서 복구현황 목록 조회 메서드 구현 예정
     // PageResponse<RecoveryResponse> getRecovery(int page, int pageSize);

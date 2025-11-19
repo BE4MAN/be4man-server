@@ -1,8 +1,10 @@
 package sys.be4man.domains.dashboard.service;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -12,8 +14,10 @@ import sys.be4man.domains.approval.model.entity.Approval;
 import sys.be4man.domains.approval.model.entity.ApprovalLine;
 import sys.be4man.domains.approval.model.type.ApprovalType;
 import sys.be4man.domains.approval.repository.ApprovalLineRepository;
+import sys.be4man.domains.approval.repository.ApprovalRepository;
 import sys.be4man.domains.dashboard.dto.response.DeploymentInfoResponse;
 import sys.be4man.domains.dashboard.dto.response.InProgressTaskResponse;
+import sys.be4man.domains.dashboard.dto.response.NotificationResponse;
 import sys.be4man.domains.dashboard.dto.response.PendingApprovalResponse;
 import sys.be4man.domains.dashboard.dto.response.RelatedServiceResponse;
 import sys.be4man.domains.deployment.model.entity.Deployment;
@@ -30,6 +34,7 @@ import sys.be4man.domains.project.repository.RelatedProjectRepository;
 public class DashboardServiceImpl implements DashboardService {
 
     private final ApprovalLineRepository approvalLineRepository;
+    private final ApprovalRepository approvalRepository;
     private final RelatedProjectRepository relatedProjectRepository;
 
     @Override
@@ -241,14 +246,145 @@ public class DashboardServiceImpl implements DashboardService {
                 .toList();
     }
 
-    // TODO: Step 4에서 알림 목록 조회 메서드 구현 예정
-    // @Override
-    // @Transactional(readOnly = true)
-    // public List<NotificationResponse> getNotifications(Long accountId) {
-    //     log.info("알림 목록 조회 - accountId: {}", accountId);
-    //     // 구현 예정
-    //     return List.of();
-    // }
+    @Override
+    @Transactional(readOnly = true)
+    public List<NotificationResponse> getNotifications(Long accountId) {
+        log.info("알림 목록 조회 - accountId: {}", accountId);
+
+        // 취소 알림 조회
+        List<Deployment> canceledDeployments = approvalLineRepository.findCanceledNotificationsByAccountId(accountId);
+
+        // 반려 알림 조회 (케이스 1: 현재 사용자가 요청한 deployment가 반려된 경우)
+        List<Deployment> rejectedByIssuer = approvalLineRepository.findRejectedDeploymentsByIssuerId(accountId);
+
+        // 반려 알림 조회 (케이스 3: 현재 사용자가 승인한 approval이 반려된 경우)
+        List<Deployment> rejectedByApprover = approvalLineRepository.findRejectedApprovalsByApproverId(accountId);
+
+        // 취소 알림 DTO 변환
+        List<NotificationResponse> canceledNotifications = canceledDeployments.stream()
+                .map(deployment -> new NotificationResponse(
+                        deployment.getId(),
+                        "취소",
+                        "작업 금지 기간에 해당되어 자동 취소되었습니다.", // TODO: 실제 취소 사유가 있다면 사용
+                        deployment.getProject().getName(),
+                        deployment.getId(),
+                        deployment.getTitle(),
+                        deployment.getUpdatedAt(), // canceledAt
+                        null // rejectedAt
+                ))
+                .toList();
+
+        // N+1 쿼리 방지를 위한 배치 조회: 반려 알림의 반려 사유 조회
+        List<Deployment> allRejectedDeployments = new ArrayList<>();
+        allRejectedDeployments.addAll(rejectedByIssuer);
+        allRejectedDeployments.addAll(rejectedByApprover);
+        
+        Map<Long, String> rejectionReasonMap = buildRejectionReasonMap(
+                allRejectedDeployments.stream()
+                        .map(Deployment::getId)
+                        .toList()
+        );
+
+        // 반려 알림 DTO 변환 (케이스 1)
+        List<NotificationResponse> rejectedByIssuerNotifications = rejectedByIssuer.stream()
+                .map(deployment -> {
+                    String reason = rejectionReasonMap.getOrDefault(
+                            deployment.getId(), "반려되었습니다.");
+                    return new NotificationResponse(
+                            deployment.getId(),
+                            "반려",
+                            reason,
+                            deployment.getProject().getName(),
+                            deployment.getId(),
+                            deployment.getTitle(),
+                            null, // canceledAt
+                            deployment.getUpdatedAt() // rejectedAt
+                    );
+                })
+                .toList();
+
+        // 반려 알림 DTO 변환 (케이스 3)
+        List<NotificationResponse> rejectedByApproverNotifications = rejectedByApprover.stream()
+                .map(deployment -> {
+                    String reason = rejectionReasonMap.getOrDefault(
+                            deployment.getId(), "반려되었습니다.");
+                    return new NotificationResponse(
+                            deployment.getId(),
+                            "반려",
+                            reason,
+                            deployment.getProject().getName(),
+                            deployment.getId(),
+                            deployment.getTitle(),
+                            null, // canceledAt
+                            deployment.getUpdatedAt() // rejectedAt (또는 approval.updatedAt)
+                    );
+                })
+                .toList();
+
+        // 모든 알림 통합 및 정렬 (updatedAt 기준 최신순)
+        List<NotificationResponse> allNotifications = new ArrayList<>();
+        allNotifications.addAll(canceledNotifications);
+        allNotifications.addAll(rejectedByIssuerNotifications);
+        allNotifications.addAll(rejectedByApproverNotifications);
+
+        // updatedAt 기준 최신순 정렬
+        return allNotifications.stream()
+                .sorted((a, b) -> {
+                    LocalDateTime aTime = a.canceledAt() != null ? a.canceledAt() : a.rejectedAt();
+                    LocalDateTime bTime = b.canceledAt() != null ? b.canceledAt() : b.rejectedAt();
+                    if (aTime == null && bTime == null) return 0;
+                    if (aTime == null) return 1;
+                    if (bTime == null) return -1;
+                    return bTime.compareTo(aTime); // DESC
+                })
+                .toList();
+    }
+
+    /**
+     * Deployment ID 목록에 대한 반려 사유 Map 생성
+     * (ApprovalLine에서 isApproved = false인 항목의 comment)
+     */
+    private Map<Long, String> buildRejectionReasonMap(List<Long> deploymentIds) {
+        if (deploymentIds.isEmpty()) {
+            return Map.of();
+        }
+
+        // Deployment ID로 Approval 조회
+        List<Approval> approvals = new ArrayList<>();
+        for (Long deploymentId : deploymentIds) {
+            approvals.addAll(approvalRepository.findByDeploymentId(deploymentId));
+        }
+
+        if (approvals.isEmpty()) {
+            return Map.of();
+        }
+
+        // Approval ID 목록으로 ApprovalLine 조회 (fetch join)
+        List<Long> approvalIds = approvals.stream()
+                .map(Approval::getId)
+                .toList();
+
+        Map<Long, String> rejectionReasonMap = new java.util.HashMap<>();
+        for (Long approvalId : approvalIds) {
+            Optional<Approval> approvalWithLines = approvalRepository.findByIdWithLines(approvalId);
+            if (approvalWithLines.isPresent()) {
+                Approval approval = approvalWithLines.get();
+                // isApproved = false인 ApprovalLine의 comment 찾기
+                String reason = approval.getApprovalLines().stream()
+                        .filter(line -> Boolean.FALSE.equals(line.getIsApproved()))
+                        .map(ApprovalLine::getComment)
+                        .findFirst()
+                        .orElse("반려되었습니다.");
+                
+                // 해당 Approval의 Deployment ID에 매핑
+                if (approval.getDeployment() != null) {
+                    rejectionReasonMap.put(approval.getDeployment().getId(), reason);
+                }
+            }
+        }
+
+        return rejectionReasonMap;
+    }
 
     // TODO: Step 5에서 복구현황 목록 조회 메서드 구현 예정
     // @Override
