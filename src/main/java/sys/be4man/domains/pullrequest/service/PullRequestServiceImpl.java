@@ -57,6 +57,7 @@ public class PullRequestServiceImpl implements PullRequestService {
                 .orElseThrow(() -> new IllegalArgumentException("PR not found id=" + id));
 
 //        pr.update(request.getRepositoryUrl(), request.getBranch());
+
         return toDto(pr);
     }
 
