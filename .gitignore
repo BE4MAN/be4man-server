@@ -1,5 +1,6 @@
 ### Build ###
 .env
+/src/main/resources/*.sql
 
 ### Gradle ###
 .gradle
