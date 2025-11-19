@@ -148,6 +148,22 @@ public class DeploymentServiceImpl implements DeploymentService {
                 .collect(Collectors.toList());
     }
 
+    @Transactional
+    public void flipStageToDeploymentIfDue(Long deploymentId) {
+        Deployment d = deploymentRepository.findByIdForUpdate(deploymentId)
+                .orElseThrow(() -> new IllegalArgumentException("Deployment not found. id=" + deploymentId));
+
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime when = d.getScheduledAt();
+
+        if (when == null || when.isAfter(now)) return;
+
+        if (d.getStage() != DeploymentStage.DEPLOYMENT) {
+            d.updateStage(DeploymentStage.DEPLOYMENT);
+            d.updateStatus(DeploymentStatus.IN_PROGRESS);
+        }
+    }
+
     private DeploymentResponse toDto(Deployment deployment) {
         return DeploymentResponse.builder()
                 .id(deployment.getId())

@@ -11,4 +11,6 @@ public interface DeploymentService {
     DeploymentResponse getDeployment(Long id);
 
     List<DeploymentResponse> getAllDeployments();
+
+    void flipStageToDeploymentIfDue(Long deploymentId);
 }
