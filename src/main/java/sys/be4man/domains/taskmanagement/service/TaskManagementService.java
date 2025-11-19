@@ -53,26 +53,25 @@ public class TaskManagementService {
 
         log.debug("조회된 Deployment 수: {}", deployments.getTotalElements());
 
-        // ✅ Deployment를 DTO로 변환하면서 필터링
-        List<TaskManagementResponseDto> filteredList = deployments.getContent().stream()
-                .filter(deployment -> {
-                    // ✅ 배포/롤백/재배포가 PENDING 상태면 제외
-                    if ((deployment.getStage() == DeploymentStage.DEPLOYMENT ||
-                            deployment.getStage() == DeploymentStage.ROLLBACK ||
-                            deployment.getStage() == DeploymentStage.RETRY) &&
-                            deployment.getStatus() == DeploymentStatus.PENDING) {
-                        log.debug("⏭️ PENDING 상태의 배포/롤백/재배포 제외 - id: {}, stage: {}, status: {}",
-                                deployment.getId(), deployment.getStage(), deployment.getStatus());
-                        return false;  // ✅ 제외
-                    }
-                    return true;  // ✅ 포함
-                })
+        // Deployment를 DTO로 변환
+        List<TaskManagementResponseDto> dtoList = deployments.getContent().stream()
                 .map(deployment -> {
-                    // ✅ PLAN Approval 조회
-                    List<Approval> planApprovals = approvalRepository.findByDeploymentIdAndTypeAndIsDeletedFalse(
-                            deployment.getId(), ApprovalType.PLAN);
+                    List<Approval> planApprovals;
 
-                    // ✅ REPORT 단계면 REPORT Approval도 조회
+                    // RETRY/ROLLBACK은 자체 Approval 조회
+                    if (deployment.getStage() == DeploymentStage.RETRY) {
+                        planApprovals = approvalRepository.findByDeploymentIdAndTypeAndIsDeletedFalse(
+                                deployment.getId(), ApprovalType.RETRY);
+                    } else if (deployment.getStage() == DeploymentStage.ROLLBACK) {
+                        planApprovals = approvalRepository.findByDeploymentIdAndTypeAndIsDeletedFalse(
+                                deployment.getId(), ApprovalType.ROLLBACK);
+                    } else {
+                        // 일반 PLAN Approval 조회
+                        planApprovals = approvalRepository.findByDeploymentIdAndTypeAndIsDeletedFalse(
+                                deployment.getId(), ApprovalType.PLAN);
+                    }
+
+                    // REPORT 단계면 REPORT Approval도 조회
                     List<Approval> reportApprovals = null;
                     if (deployment.getStage() == DeploymentStage.REPORT) {
                         reportApprovals = approvalRepository.findByDeploymentIdAndTypeAndIsDeletedFalse(
@@ -83,8 +82,8 @@ public class TaskManagementService {
                 })
                 .collect(Collectors.toList());
 
-        // ✅ PageImpl로 Page 객체 생성
-        return new PageImpl<>(filteredList, pageable, deployments.getTotalElements());
+        // PageImpl로 Page 객체 생성
+        return new PageImpl<>(dtoList, pageable, deployments.getTotalElements());
     }
 
     public TaskManagementResponseDto getTaskDetail(Long taskId) {
@@ -123,63 +122,314 @@ public class TaskManagementService {
 
         Long pullRequestId = deployment.getPullRequest() != null ? deployment.getPullRequest().getId() : null;
 
-        // ✅ 같은 PR의 모든 deployment 조회
+        // ✅ 같은 프로세스의 deployment 조회 (PLAN 기준으로 그룹화)
         DeploymentStage maxStage = deployment.getStage();  // 가장 진행된 단계
+        List<Deployment> relatedDeployments;
 
-        if (pullRequestId != null) {
-            // ✅ 같은 PR의 모든 deployment 조회하여 가장 진행된 단계 확인
-            List<Deployment> relatedDeployments = taskManagementRepository.findAll().stream()
+        // ✅ RETRY/ROLLBACK은 독립적인 프로세스 (자기 자신만 사용)
+        if (deployment.getStage() == DeploymentStage.RETRY || deployment.getStage() == DeploymentStage.ROLLBACK) {
+            log.debug("RETRY/ROLLBACK 독립 프로세스 - deploymentId: {}, stage: {}",
+                    deployment.getId(), deployment.getStage());
+
+            relatedDeployments = List.of(deployment);
+            planDeployment = null;  // RETRY/ROLLBACK은 별도의 PLAN이 없음
+            deploymentTask = deployment;  // 자기 자신이 배포 작업
+            reportDeployment = null;
+
+        } else if (deployment.getStage() == DeploymentStage.REPORT && pullRequestId != null) {
+            // ✅ REPORT는 바로 직전에 생성된 RETRY/ROLLBACK을 찾기
+            Long projectId = deployment.getProject().getId();
+
+            // REPORT 바로 직전의 RETRY/ROLLBACK 찾기
+            List<Deployment> retryRollbackList = taskManagementRepository.findAll().stream()
                     .filter(d -> !d.getIsDeleted())
+                    .filter(d -> d.getProject() != null && d.getProject().getId().equals(projectId))
                     .filter(d -> d.getPullRequest() != null && d.getPullRequest().getId().equals(pullRequestId))
+                    .filter(d -> d.getStage() == DeploymentStage.RETRY || d.getStage() == DeploymentStage.ROLLBACK)
+                    .filter(d -> d.getCreatedAt().isBefore(deployment.getCreatedAt()) ||
+                                (d.getCreatedAt().equals(deployment.getCreatedAt()) && d.getId() < deployment.getId()))
+                    .sorted((d1, d2) -> {
+                        int timeCompare = d2.getCreatedAt().compareTo(d1.getCreatedAt());
+                        if (timeCompare != 0) return timeCompare;
+                        return d2.getId().compareTo(d1.getId());
+                    })
+                    .limit(1)
                     .collect(Collectors.toList());
 
-            log.debug("같은 PR의 deployment 개수: {}", relatedDeployments.size());
+            if (!retryRollbackList.isEmpty()) {
+                // RETRY/ROLLBACK 프로세스의 REPORT
+                Deployment retryRollback = retryRollbackList.get(0);
+                log.debug("REPORT는 RETRY/ROLLBACK 프로세스에 속함 - reportId: {}, retryId: {}, retryCreatedAt: {}",
+                        deployment.getId(), retryRollback.getId(), retryRollback.getCreatedAt());
 
-            // 가장 진행된 단계 찾기
-            for (Deployment d : relatedDeployments) {
-                if (getStageOrder(d.getStage()) > getStageOrder(maxStage)) {
-                    maxStage = d.getStage();
+                relatedDeployments = List.of(retryRollback, deployment);
+                planDeployment = null;
+                deploymentTask = retryRollback;
+                reportDeployment = deployment;
+            } else {
+                // 일반 PLAN 프로세스의 REPORT - PLAN 찾기로 진행
+                log.debug("REPORT는 일반 PLAN 프로세스에 속함 - reportId: {}", deployment.getId());
+
+                // ✅ Step 1: 현재 배포가 속한 PLAN 찾기
+                List<Deployment> relatedPlanList = taskManagementRepository.findRelatedPlanList(
+                    projectId,
+                    pullRequestId,
+                    deployment.getCreatedAt(),
+                    deployment.getId()
+            );
+
+            if (relatedPlanList.isEmpty()) {
+                log.warn("⚠️ PLAN이 없는 배포 - deploymentId: {}, stage: {}, createdAt: {}",
+                        deployment.getId(), deployment.getStage(), deployment.getCreatedAt());
+
+                // PLAN이 없으면 현재 배포만 표시
+                relatedDeployments = List.of(deployment);
+                planDeployment = deployment.getStage() == DeploymentStage.PLAN ? deployment : null;
+                deploymentTask = deployment.getStage() == DeploymentStage.DEPLOYMENT ||
+                        deployment.getStage() == DeploymentStage.RETRY ||
+                        deployment.getStage() == DeploymentStage.ROLLBACK ? deployment : null;
+                reportDeployment = deployment.getStage() == DeploymentStage.REPORT ? deployment : null;
+
+            } else {
+                Deployment relatedPlan = relatedPlanList.get(0);
+
+                log.debug("✅ 현재 배포가 속한 PLAN 찾음 - deploymentId: {}, planId: {}, planCreatedAt: {}",
+                        deployment.getId(), relatedPlan.getId(), relatedPlan.getCreatedAt());
+
+                // ✅ Step 2: 다음 PLAN 찾기 (다음 프로세스의 시작점)
+                List<Deployment> nextPlanList = taskManagementRepository.findNextPlanList(
+                        projectId,
+                        pullRequestId,
+                        relatedPlan.getCreatedAt(),
+                        relatedPlan.getId()
+                );
+
+                LocalDateTime endTime = nextPlanList.isEmpty() ? null : nextPlanList.get(0).getCreatedAt();
+                Long endId = nextPlanList.isEmpty() ? null : nextPlanList.get(0).getId();
+
+                log.debug("다음 PLAN 조회 - nextPlanId: {}, nextPlanCreatedAt: {}",
+                        endId,
+                        endTime);
+
+                // ✅ Step 3: 프로세스 범위 내 모든 배포 조회 (QueryDSL 사용)
+                relatedDeployments = taskManagementRepository.findProcessDeploymentsQueryDsl(
+                        projectId,
+                        pullRequestId,
+                        relatedPlan.getCreatedAt(),
+                        relatedPlan.getId(),
+                        endTime,
+                        endId
+                );
+
+                log.debug("✅ 프로세스 범위 조회 완료 - PLAN: {}, 다음 PLAN: {}, 배포 개수: {}",
+                        relatedPlan.getId(),
+                        endId,
+                        relatedDeployments.size());
+
+                // 가장 진행된 단계 찾기
+                for (Deployment d : relatedDeployments) {
+                    if (getStageOrder(d.getStage()) > getStageOrder(maxStage)) {
+                        maxStage = d.getStage();
+                    }
+                }
+
+                log.debug("가장 진행된 단계: {}", maxStage);
+
+                // 계획서 찾기 (프로세스 내에는 PLAN이 하나만 있음)
+                planDeployment = relatedDeployments.stream()
+                        .filter(d -> d.getStage() == DeploymentStage.PLAN)
+                        .findFirst()
+                        .orElse(deployment);
+
+                // 배포 작업 찾기 (시간순 정렬되어 있으므로 첫 번째)
+                deploymentTask = relatedDeployments.stream()
+                        .filter(d -> d.getStage() == DeploymentStage.DEPLOYMENT ||
+                                d.getStage() == DeploymentStage.RETRY ||
+                                d.getStage() == DeploymentStage.ROLLBACK)
+                        .findFirst()
+                        .orElse(null);
+
+                // 결과보고 찾기
+                reportDeployment = relatedDeployments.stream()
+                        .filter(d -> d.getStage() == DeploymentStage.REPORT)
+                        .findFirst()
+                        .orElse(null);
+
+                log.debug("✅ 프로세스 기반 조회 완료 - planId: {}, deploymentId: {}, reportId: {}",
+                        planDeployment.getId(),
+                        deploymentTask != null ? deploymentTask.getId() : "없음",
+                        reportDeployment != null ? reportDeployment.getId() : "없음");
                 }
             }
 
-            log.debug("가장 진행된 단계: {}", maxStage);
+        } else if (pullRequestId != null) {
+            Long projectId = deployment.getProject().getId();
 
-            // 계획서 찾기
-            planDeployment = relatedDeployments.stream()
-                    .filter(d -> d.getStage() == DeploymentStage.PLAN)
-                    .max((d1, d2) -> d1.getCreatedAt().compareTo(d2.getCreatedAt()))
-                    .orElse(deployment);
+            // ✅ Step 1: 현재 배포가 속한 PLAN 찾기 (일반 DEPLOYMENT, PLAN)
+            List<Deployment> relatedPlanList = taskManagementRepository.findRelatedPlanList(
+                    projectId,
+                    pullRequestId,
+                    deployment.getCreatedAt(),
+                    deployment.getId()
+            );
 
-            // 배포 작업 찾기
-            deploymentTask = relatedDeployments.stream()
-                    .filter(d -> d.getStage() == DeploymentStage.DEPLOYMENT ||
-                            d.getStage() == DeploymentStage.RETRY ||
-                            d.getStage() == DeploymentStage.ROLLBACK)
-                    .min((d1, d2) -> d1.getCreatedAt().compareTo(d2.getCreatedAt()))
-                    .orElse(null);
+            if (relatedPlanList.isEmpty()) {
+                log.warn("⚠️ PLAN이 없는 배포 - deploymentId: {}, stage: {}, createdAt: {}",
+                        deployment.getId(), deployment.getStage(), deployment.getCreatedAt());
 
-            // 결과보고 찾기
-            reportDeployment = relatedDeployments.stream()
-                    .filter(d -> d.getStage() == DeploymentStage.REPORT)
-                    .max((d1, d2) -> d1.getCreatedAt().compareTo(d2.getCreatedAt()))
-                    .orElse(null);
+                relatedDeployments = List.of(deployment);
+                planDeployment = deployment.getStage() == DeploymentStage.PLAN ? deployment : null;
+                deploymentTask = deployment.getStage() == DeploymentStage.DEPLOYMENT ? deployment : null;
+                reportDeployment = null;
 
-            log.debug("✅ PR 기반 조회 완료 - planId: {}, deploymentId: {}, reportId: {}",
-                    planDeployment.getId(),
-                    deploymentTask != null ? deploymentTask.getId() : "없음",
-                    reportDeployment != null ? reportDeployment.getId() : "없음");
+            } else {
+                Deployment relatedPlan = relatedPlanList.get(0);
+
+                log.debug("✅ 현재 배포가 속한 PLAN 찾음 - deploymentId: {}, planId: {}, planCreatedAt: {}",
+                        deployment.getId(), relatedPlan.getId(), relatedPlan.getCreatedAt());
+
+                // ✅ Step 2: 다음 PLAN 찾기
+                List<Deployment> nextPlanList = taskManagementRepository.findNextPlanList(
+                        projectId,
+                        pullRequestId,
+                        relatedPlan.getCreatedAt(),
+                        relatedPlan.getId()
+                );
+
+                LocalDateTime endTime = nextPlanList.isEmpty() ? null : nextPlanList.get(0).getCreatedAt();
+                Long endId = nextPlanList.isEmpty() ? null : nextPlanList.get(0).getId();
+
+                log.debug("다음 PLAN 조회 - nextPlanId: {}, nextPlanCreatedAt: {}",
+                        endId,
+                        endTime);
+
+                // ✅ Step 3: RETRY/ROLLBACK이 범위 내에 있는지 먼저 확인 (프로세스 분리 지점)
+                List<Deployment> retryRollbackInRange = taskManagementRepository.findAll().stream()
+                        .filter(d -> !d.getIsDeleted())
+                        .filter(d -> d.getProject() != null && d.getProject().getId().equals(projectId))
+                        .filter(d -> d.getPullRequest() != null && d.getPullRequest().getId().equals(pullRequestId))
+                        .filter(d -> d.getStage() == DeploymentStage.RETRY || d.getStage() == DeploymentStage.ROLLBACK)
+                        .filter(d -> {
+                            // PLAN 이후 생성된 것만
+                            boolean afterPlan = d.getCreatedAt().isAfter(relatedPlan.getCreatedAt()) ||
+                                    (d.getCreatedAt().equals(relatedPlan.getCreatedAt()) && d.getId() > relatedPlan.getId());
+                            if (!afterPlan) return false;
+
+                            // 다음 PLAN 이전 생성된 것만 (없으면 모두 포함)
+                            if (endTime != null) {
+                                return d.getCreatedAt().isBefore(endTime) ||
+                                        (d.getCreatedAt().equals(endTime) && d.getId() < endId);
+                            }
+                            return true;
+                        })
+                        .sorted((d1, d2) -> {
+                            int timeCompare = d1.getCreatedAt().compareTo(d2.getCreatedAt());
+                            if (timeCompare != 0) return timeCompare;
+                            return d1.getId().compareTo(d2.getId());
+                        })
+                        .limit(1)
+                        .collect(Collectors.toList());
+
+                // RETRY/ROLLBACK이 있으면 그것을 프로세스 종료 지점으로 사용
+                if (!retryRollbackInRange.isEmpty()) {
+                    Deployment firstRetry = retryRollbackInRange.get(0);
+                    log.debug("⚠️ 범위 내 RETRY/ROLLBACK 발견 - id: {}, 프로세스를 여기서 종료합니다", firstRetry.getId());
+                    endTime = firstRetry.getCreatedAt();
+                    endId = firstRetry.getId();
+                }
+
+                // ✅ Step 4: 프로세스 범위 내 모든 배포 조회
+                relatedDeployments = taskManagementRepository.findProcessDeploymentsQueryDsl(
+                        projectId,
+                        pullRequestId,
+                        relatedPlan.getCreatedAt(),
+                        relatedPlan.getId(),
+                        endTime,
+                        endId
+                );
+
+                log.debug("✅ 프로세스 범위 조회 완료 - PLAN: {}, 종료점: {}, 배포 개수: {}",
+                        relatedPlan.getId(),
+                        endId,
+                        relatedDeployments.size());
+
+                // ✅ 조회된 배포들 상세 로깅
+                for (Deployment d : relatedDeployments) {
+                    log.debug("  - 프로세스 내 배포: id={}, stage={}, createdAt={}",
+                            d.getId(), d.getStage(), d.getCreatedAt());
+                }
+
+                // 가장 진행된 단계 찾기
+                for (Deployment d : relatedDeployments) {
+                    if (getStageOrder(d.getStage()) > getStageOrder(maxStage)) {
+                        maxStage = d.getStage();
+                    }
+                }
+
+                planDeployment = relatedDeployments.stream()
+                        .filter(d -> d.getStage() == DeploymentStage.PLAN)
+                        .findFirst()
+                        .orElse(deployment);
+
+                deploymentTask = relatedDeployments.stream()
+                        .filter(d -> d.getStage() == DeploymentStage.DEPLOYMENT)
+                        .findFirst()
+                        .orElse(null);
+
+                reportDeployment = relatedDeployments.stream()
+                        .filter(d -> d.getStage() == DeploymentStage.REPORT)
+                        .findFirst()
+                        .orElse(null);
+            }
+
+        } else {
+            // PR이 없으면 현재 배포만 표시
+            log.debug("PR이 없는 배포 - deploymentId: {}", deployment.getId());
+            relatedDeployments = List.of(deployment);
         }
 
         // ✅ Approval 조회
-        List<Approval> planApprovals = approvalRepository.findByDeploymentIdAndTypeAndIsDeletedFalse(
-                planDeployment.getId(), ApprovalType.PLAN);
+        List<Approval> planApprovals;
+
+        // RETRY/ROLLBACK은 자체가 계획서를 포함하므로 해당 Deployment의 Approval 조회
+        if (deployment.getStage() == DeploymentStage.RETRY) {
+            planApprovals = approvalRepository.findByDeploymentIdAndTypeAndIsDeletedFalse(
+                    deployment.getId(), ApprovalType.RETRY);
+            log.debug("RETRY 계획서 조회 - deploymentId: {}, approvals: {}",
+                    deployment.getId(), planApprovals.size());
+        } else if (deployment.getStage() == DeploymentStage.ROLLBACK) {
+            planApprovals = approvalRepository.findByDeploymentIdAndTypeAndIsDeletedFalse(
+                    deployment.getId(), ApprovalType.ROLLBACK);
+            log.debug("ROLLBACK 계획서 조회 - deploymentId: {}, approvals: {}",
+                    deployment.getId(), planApprovals.size());
+        } else if (deploymentTask != null && (deploymentTask.getStage() == DeploymentStage.RETRY ||
+                                               deploymentTask.getStage() == DeploymentStage.ROLLBACK)) {
+            // RETRY/ROLLBACK 프로세스의 REPORT인 경우
+            ApprovalType approvalType = deploymentTask.getStage() == DeploymentStage.RETRY ?
+                                       ApprovalType.RETRY : ApprovalType.ROLLBACK;
+            planApprovals = approvalRepository.findByDeploymentIdAndTypeAndIsDeletedFalse(
+                    deploymentTask.getId(), approvalType);
+            log.debug("RETRY/ROLLBACK 프로세스의 REPORT - deploymentTaskId: {}, approvals: {}",
+                    deploymentTask.getId(), planApprovals.size());
+        } else if (planDeployment != null) {
+            // 일반 프로세스는 PLAN Deployment의 Approval 조회
+            planApprovals = approvalRepository.findByDeploymentIdAndTypeAndIsDeletedFalse(
+                    planDeployment.getId(), ApprovalType.PLAN);
+            log.debug("PLAN 계획서 조회 - planDeploymentId: {}, approvals: {}",
+                    planDeployment.getId(), planApprovals.size());
+        } else {
+            // planDeployment가 null인 경우 (예외 상황)
+            planApprovals = List.of();
+            log.warn("⚠️ planDeployment가 null - deploymentId: {}, stage: {}",
+                    deployment.getId(), deployment.getStage());
+        }
 
         List<Approval> reportApprovals = reportDeployment != null ?
                 approvalRepository.findByDeploymentIdAndTypeAndIsDeletedFalse(
                         reportDeployment.getId(), ApprovalType.REPORT) :
                 List.of();
 
-        log.debug("Approval 조회 - planApprovals: {}, reportApprovals: {}",
+        log.debug("Approval 조회 완료 - planApprovals: {}, reportApprovals: {}",
                 planApprovals.size(), reportApprovals.size());
 
         Long buildRunDeploymentId = deploymentTask != null ? deploymentTask.getId() : deployment.getId();
@@ -199,8 +449,18 @@ public class TaskManagementService {
 
         JenkinsLogDto jenkinsLog = buildRunOpt.map(this::buildJenkinsLog).orElse(null);
 
+        // RETRY/ROLLBACK은 자기 자신이 계획서, RETRY/ROLLBACK 프로세스의 REPORT는 deploymentTask 사용
+        Deployment planContentDeployment;
+        if (deployment.getStage() == DeploymentStage.RETRY || deployment.getStage() == DeploymentStage.ROLLBACK) {
+            planContentDeployment = deployment;
+        } else if (deploymentTask != null && (deploymentTask.getStage() == DeploymentStage.RETRY ||
+                                               deploymentTask.getStage() == DeploymentStage.ROLLBACK)) {
+            planContentDeployment = deploymentTask;
+        } else {
+            planContentDeployment = planDeployment;
+        }
         PlanContentDto planContent = taskDetailInfoService.buildPlanContent(
-                planDeployment, planApprovals, buildRunOpt.orElse(null));
+                planContentDeployment, planApprovals, buildRunOpt.orElse(null));
 
         ApprovalInfoDto planApprovalInfo = taskDetailApprovalService.buildApprovalInfo(
                 planApprovals, DeploymentStage.PLAN);
