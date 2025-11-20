@@ -1,13 +1,15 @@
 package sys.be4man.domains.problem.model.entity;
 
 import jakarta.persistence.*;
-import lombok.*;
+import java.util.ArrayList;
+import java.util.List;
+import lombok.AccessLevel;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 import sys.be4man.domains.account.model.entity.Account;
 import sys.be4man.domains.problem.model.type.Importance;
 import sys.be4man.global.model.entity.BaseEntity;
-
-import java.util.ArrayList;
-import java.util.List;
 
 @Entity
 @Table(name = "problem")
@@ -29,11 +31,9 @@ public class Problem extends BaseEntity {
     @JoinColumn(name = "account_id", nullable = false)
     private Account account;
 
-    /** 제목 */
     @Column(nullable = false)
     private String title;
 
-    /** 설명(발생상황, 예방법) */
     @Column(nullable = false, columnDefinition = "text")
     private String description;
 
@@ -42,21 +42,28 @@ public class Problem extends BaseEntity {
     @Column(nullable = false)
     private Importance importance;
 
+    @Column(name = "is_solved", nullable = false)
+    private boolean isSolved = false;
+
     /** 배포 매핑들 */
     @OneToMany(mappedBy = "problem")
     private List<ProblemDeployment> problemDeployments = new ArrayList<>();
 
     @Builder
-    private Problem(ProblemCategory category,
+    private Problem(
+            ProblemCategory category,
             Account account,
             String title,
             String description,
-            Importance importance) {
+            Importance importance,
+            boolean isSolved
+    ) {
         this.category = category;
         this.account = account;
         this.title = title;
         this.description = description;
         this.importance = importance;
+        this.isSolved = isSolved;
     }
 
     public void addProblemDeployment(ProblemDeployment link) {
@@ -73,5 +80,33 @@ public class Problem extends BaseEntity {
 
     public void updateImportance(Importance importance) {
         this.importance = importance;
+    }
+
+    public void changeCategory(ProblemCategory category) {
+        this.category = category;
+    }
+
+    public void changeAccount(Account account) {
+        this.account = account;
+    }
+
+    public void updateBasicInfo(String title, String description, Importance importance) {
+        if (title != null) {
+            this.title = title;
+        }
+        if (description != null) {
+            this.description = description;
+        }
+        if (importance != null) {
+            this.importance = importance;
+        }
+    }
+
+    public void markSolved() {
+        this.isSolved = true;
+    }
+
+    public void markUnsolved() {
+        this.isSolved = false;
     }
 }

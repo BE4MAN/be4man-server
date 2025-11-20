@@ -18,4 +18,5 @@ public class ProblemCreateRequest {
     private Importance importance;
 
     private List<Long> deploymentIds;
+    private Boolean isSolved;
 }

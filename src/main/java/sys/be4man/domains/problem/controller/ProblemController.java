@@ -8,6 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import sys.be4man.domains.problem.dto.request.ProblemCategoryCreateRequest;
 import sys.be4man.domains.problem.dto.request.ProblemCreateRequest;
+import sys.be4man.domains.problem.dto.request.ProblemUpdateRequest;
 import sys.be4man.domains.problem.dto.response.ProblemCategoryResponse;
 import sys.be4man.domains.problem.dto.response.ProblemResponse;
 import sys.be4man.domains.problem.service.ProblemCategoryService;
@@ -80,5 +81,22 @@ public class ProblemController {
     public ResponseEntity<List<ProblemResponse>> getAllProblems() {
         List<ProblemResponse> list = problemService.getAllProblems();
         return ResponseEntity.ok(list);
+    }
+
+    @Operation(summary = "문제 수정")
+    @PutMapping("/problems/{id}")
+    public ResponseEntity<Void> updateProblem(
+            @PathVariable Long id,
+            @RequestBody ProblemUpdateRequest request
+    ) {
+        problemService.updateProblem(id, request);
+        return ResponseEntity.noContent().build();
+    }
+
+    @Operation(summary = "문제 삭제")
+    @DeleteMapping("/problems/{id}")
+    public ResponseEntity<Void> deleteProblem(@PathVariable Long id) {
+        problemService.deleteProblem(id);
+        return ResponseEntity.noContent().build();
     }
 }

@@ -13,6 +13,6 @@ public interface AccountService {
      * 내 계정 정보 조회
      */
     AccountInfoResponse getMyAccount(Long accountId);
-
+    AccountInfoResponse getAccountById(Long accountId);
     List<ApprovalLineAccountResponse> searchApprovalLineAccounts(String department, String keyword);
 }
