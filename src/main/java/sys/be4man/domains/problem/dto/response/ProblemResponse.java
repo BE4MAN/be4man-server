@@ -21,6 +21,7 @@ public class ProblemResponse {
 
     private List<Long> deploymentIds;
     private Boolean isSolved;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

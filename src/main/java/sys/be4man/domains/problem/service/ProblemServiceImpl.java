@@ -55,6 +55,7 @@ public class ProblemServiceImpl implements ProblemService {
                 if (depId == null) {
                     continue;
                 }
+                if (depId == null) continue;
                 Deployment deployment = deploymentRepository.findById(depId)
                         .orElseThrow(() -> new IllegalArgumentException("Deployment not found. id=" + depId));
 

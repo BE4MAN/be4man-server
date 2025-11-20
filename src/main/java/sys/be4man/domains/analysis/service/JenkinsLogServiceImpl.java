@@ -45,7 +45,6 @@ public class JenkinsLogServiceImpl implements LogService {
     private final StageAnalysisService stageAnalysisService;
     private final WebhookService webhookService;
 
-
     @Value("${jenkins.url}")
     private String jenkinsUrl;
 
@@ -139,53 +138,43 @@ public class JenkinsLogServiceImpl implements LogService {
         final Long deploymentId = jenkinsData.deploymentId();
         final String jobName = jenkinsData.jobName();
         final String buildNumber = jenkinsData.buildNumber();
+        LocalDateTime startedAt = null;
+        LocalDateTime endedAt = null;
 
         try {
-            // 1) 우선 웹훅에 실린 값으로 시각 확정 시도
-            LocalDateTime startedAt = parseIsoOrNull(jenkinsData.startTime());
-            LocalDateTime endedAt = parseIsoOrNull(jenkinsData.endTime());
-            Long durSecFromWebhook = parseDurationSeconds(
-                    jenkinsData.duration()); // "and counting"이면 null
-
-            if (startedAt == null && endedAt != null && durSecFromWebhook != null) {
-                startedAt = endedAt.minusSeconds(durSecFromWebhook);
-            } else if (endedAt == null && startedAt != null && durSecFromWebhook != null) {
-                endedAt = startedAt.plusSeconds(durSecFromWebhook);
-            }
 
             // 2) 여전히 started/ended 확정이 안 되면: Jenkins Build JSON API를 5초마다 폴링
-            if (startedAt == null || endedAt == null) {
-                final int MAX_MINUTES = 10;       // 최대 대기 10분 (필요시 조정/설정값화)
-                final int SLEEP_MS = 5000;        // 5초 간격
-                final long deadline = System.currentTimeMillis() + MAX_MINUTES * 60_000L;
+            final int MAX_MINUTES = 10;       // 최대 대기 10분 (필요시 조정/설정값화)
+            final int SLEEP_MS = 5000;        // 5초 간격
+            final long deadline = System.currentTimeMillis() + MAX_MINUTES * 60_000L;
 
-                while (System.currentTimeMillis() < deadline) {
-                    BuildMeta meta = fetchBuildMeta(jobName, buildNumber);
-                    if (meta != null && !meta.building) {
+            while (System.currentTimeMillis() < deadline) {
+                BuildMeta meta = fetchBuildMeta(jobName, buildNumber);
+                if (meta != null && !meta.building) {
 
-                        Boolean isDeployed = DeploymentResult.fromJenkinsStatus(jenkinsData.result()).getIsDeployed();
-                        webhookService.setDeployResult(jenkinsData, isDeployed);
+                    Boolean isDeployed = DeploymentResult.fromJenkinsStatus(meta.result)
+                            .getIsDeployed();
+                    webhookService.setDeployResult(jenkinsData, isDeployed);
 
-                        // Jenkins API: timestamp(ms) = 시작시각, duration(ms) = 총 소요
-                        LocalDateTime start = LocalDateTime.ofInstant(
-                                java.time.Instant.ofEpochMilli(meta.timestamp),
-                                java.time.ZoneOffset.UTC);
-                        LocalDateTime end = start.plusNanos(
-                                java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(
-                                        meta.durationMs));
-                        startedAt = (startedAt == null) ? start : startedAt;
-                        endedAt = (endedAt == null) ? end : endedAt;
-                        log.info(
-                                "Jenkins build finished via polling. job={}, build={}, startedAt={}, endedAt={}, result={}",
-                                jobName, buildNumber, startedAt, endedAt, meta.result);
-                        break;
-                    }
-                    try {
-                        Thread.sleep(SLEEP_MS);
-                    } catch (InterruptedException ie) {
-                        Thread.currentThread().interrupt();
-                        break;
-                    }
+                    // Jenkins API: timestamp(ms) = 시작시각, duration(ms) = 총 소요
+                    LocalDateTime start = LocalDateTime.ofInstant(
+                            java.time.Instant.ofEpochMilli(meta.timestamp),
+                            java.time.ZoneOffset.UTC);
+                    LocalDateTime end = start.plusNanos(
+                            java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(
+                                    meta.durationMs));
+                    startedAt = (startedAt == null) ? start : startedAt;
+                    endedAt = (endedAt == null) ? end : endedAt;
+                    log.info(
+                            "Jenkins build finished via polling. job={}, build={}, startedAt={}, endedAt={}, result={}",
+                            jobName, buildNumber, startedAt, endedAt, meta.result);
+                    break;
+                }
+                try {
+                    Thread.sleep(SLEEP_MS);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    break;
                 }
             }
 

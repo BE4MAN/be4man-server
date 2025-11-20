@@ -21,10 +21,12 @@ public class Problem extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    /** 문제 유형 */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "category_id", nullable = false)
     private ProblemCategory category;
 
+    /** 생성자 */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "account_id", nullable = false)
     private Account account;
@@ -35,6 +37,7 @@ public class Problem extends BaseEntity {
     @Column(nullable = false, columnDefinition = "text")
     private String description;
 
+    /** 중요도 */
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private Importance importance;
@@ -42,6 +45,7 @@ public class Problem extends BaseEntity {
     @Column(name = "is_solved", nullable = false)
     private boolean isSolved = false;
 
+    /** 배포 매핑들 */
     @OneToMany(mappedBy = "problem")
     private List<ProblemDeployment> problemDeployments = new ArrayList<>();
 
