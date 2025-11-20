@@ -304,6 +304,8 @@ public class TaskManagementService {
                         endTime);
 
                 // ✅ Step 3: RETRY/ROLLBACK이 범위 내에 있는지 먼저 확인 (프로세스 분리 지점)
+                LocalDateTime finalEndTime = endTime;
+                Long finalEndId = endId;
                 List<Deployment> retryRollbackInRange = taskManagementRepository.findAll().stream()
                         .filter(d -> !d.getIsDeleted())
                         .filter(d -> d.getProject() != null && d.getProject().getId().equals(projectId))
@@ -316,9 +318,9 @@ public class TaskManagementService {
                             if (!afterPlan) return false;
 
                             // 다음 PLAN 이전 생성된 것만 (없으면 모두 포함)
-                            if (endTime != null) {
-                                return d.getCreatedAt().isBefore(endTime) ||
-                                        (d.getCreatedAt().equals(endTime) && d.getId() < endId);
+                            if (finalEndTime != null) {
+                                return d.getCreatedAt().isBefore(finalEndTime) ||
+                                        (d.getCreatedAt().equals(finalEndTime) && d.getId() < finalEndId);
                             }
                             return true;
                         })
