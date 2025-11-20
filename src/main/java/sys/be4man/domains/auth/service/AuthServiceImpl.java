@@ -50,7 +50,8 @@ public class AuthServiceImpl implements AuthService {
         // Redis에서 GitHub 정보 조회 및 삭제
         GitHubTempInfo tempInfo = signTokenRedisService.getAndDelete(githubId)
                 .orElseThrow(() -> new AuthException(AuthExceptionType.SIGN_TOKEN_INFO_NOT_FOUND));
-        log.info("회원가입 진행 - githubId: {}", githubId);
+        log.info("회원가입 진행 - githubId: {}, email: {}",
+                 githubId, tempInfo.email() != null ? tempInfo.email() : "N/A");
 
         // 중복 계정 확인
         accountChecker.checkConflictAccountExistsByGithubId(githubId);
@@ -104,7 +105,7 @@ public class AuthServiceImpl implements AuthService {
         // Refresh Token 발급 (기존 토큰 교체)
         String refreshToken = refreshTokenRedisService.createAndSave(account.getId());
 
-        log.info("로그인 완료 - accountId: {}", accountId);
+        log.info("로그인 완료 - accountId: {} accessToken: {}", accountId, accessToken);
 
         return new AuthResponse(accessToken, refreshToken);
     }

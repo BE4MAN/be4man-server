@@ -30,10 +30,10 @@ public class Account extends BaseEntity {
     @Column(name = "github_id", unique = true, nullable = false)
     private Long githubId;
 
-    @Column(name = "name", length = 52, nullable = false)
+    @Column(name = "name", nullable = false, length = 52)
     private String name;
 
-    @Column(name = "email", length = 512, unique = true, nullable = false)
+    @Column(name = "email", unique = true, length = 512)
     private String email;
 
     @Enumerated(EnumType.STRING)
@@ -41,17 +41,17 @@ public class Account extends BaseEntity {
     private Role role;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "position", nullable = false, length = 20)
+    @Column(name = "position", nullable = false, length = 52)
     private JobPosition position;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "department", nullable = false, length = 20)
+    @Column(name = "department", nullable = false, length = 52)
     private JobDepartment department;
 
     @Column(name = "profile_image_url", length = 512)
     private String profileImageUrl;
 
-    @Column(name = "github_access_token", length = 512, nullable = false)
+    @Column(name = "github_access_token", nullable = false, length = 512)
     private String githubAccessToken;
 
     @Builder

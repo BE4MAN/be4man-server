@@ -31,6 +31,11 @@ public enum AuthExceptionType implements ExceptionType {
     private final String message;
 
     @Override
+    public String getName() {
+        return name();
+    }
+
+    @Override
     public String getMessage() {
         return message;
     }

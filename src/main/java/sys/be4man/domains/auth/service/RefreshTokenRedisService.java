@@ -11,10 +11,8 @@ import sys.be4man.domains.auth.jwt.JwtProvider;
 /**
  * Refresh Token을 Redis에 저장/조회/삭제하는 서비스
  * <p>
- * - Refresh Token: JWT 형식 (accountId, jti, type)
- * - Redis 저장 형태: Key = "refresh:{accountId}", Value = JTI (JWT ID)
- * - TTL: 2주 (Redis key expiration으로 자동 관리)
- * - 클라이언트에 전달: JWT 형식의 Refresh Token
+ * - Refresh Token: JWT 형식 (accountId, jti, type) - Redis 저장 형태: Key = "refresh:{accountId}", Value
+ * = JTI (JWT ID) - TTL: 2주 (Redis key expiration으로 자동 관리) - 클라이언트에 전달: JWT 형식의 Refresh Token
  */
 @Slf4j
 @Service
@@ -76,7 +74,7 @@ public class RefreshTokenRedisService {
      */
     public boolean exists(Long accountId) {
         String key = KEY_PREFIX + accountId;
-        return Boolean.TRUE.equals(refreshTokenRedisTemplate.hasKey(key));
+        return refreshTokenRedisTemplate.hasKey(key);
     }
 }
 

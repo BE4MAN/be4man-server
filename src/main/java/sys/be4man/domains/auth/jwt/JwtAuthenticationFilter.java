@@ -31,6 +31,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
      */
     private static final List<String> EXCLUDE_PATHS = Arrays.asList(
             "/oauth",
+            "/oauth2",
+            "/login/oauth2",
             "/public",
             "/swagger-ui",
             "/v3/api-docs",
@@ -38,7 +40,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             "/swagger-resources",
             "/webjars",
             "/api/health",
-            "/h2-console"
+            "/h2-console",
+            "/api/auth/signup",
+            "/api/auth/signin",
+            "/api/auth/refresh"
     );
 
     /**
@@ -70,12 +75,18 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     /**
      * 특정 경로는 필터를 건너뛰도록 설정
+     * OPTIONS 요청(Preflight)도 필터를 건너뛰어 CORS 처리가 정상적으로 이루어지도록 함
      *
      * @param request HTTP 요청
      * @return 필터를 건너뛸지 여부
      */
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
+        // OPTIONS 요청(Preflight)은 필터를 건너뛰기
+        if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
+            return true;
+        }
+
         String path = request.getRequestURI();
         return EXCLUDE_PATHS.stream().anyMatch(path::startsWith);
     }
@@ -106,6 +117,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         Long accountId = jwtProvider.getAccountIdFromToken(token);
         Role role = jwtProvider.getRoleFromToken(token);
 
+        // Role이 null이면 SignToken 등 인증용이 아닌 토큰이므로 인증 설정 건너뜀
+        if (role == null) {
+            return;
+        }
+
         AccountPrincipal principal = new AccountPrincipal(accountId, role);
         UsernamePasswordAuthenticationToken authentication = createAuthentication(principal);
 
@@ -122,7 +138,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
      * @return UsernamePasswordAuthenticationToken
      */
     private UsernamePasswordAuthenticationToken createAuthentication(AccountPrincipal principal) {
-        SimpleGrantedAuthority authority = 
+        SimpleGrantedAuthority authority =
                 new SimpleGrantedAuthority("ROLE_" + principal.role().name());
 
         return new UsernamePasswordAuthenticationToken(
