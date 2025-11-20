@@ -2,9 +2,10 @@ package sys.be4man.domains.analysis.service;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.scheduling.annotation.Async;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import sys.be4man.domains.analysis.repository.BuildSessionRegistry;
@@ -23,6 +24,10 @@ public class JenkinsConsoleStreamingService {
     private final JenkinsLogCache logCache;
     private final JenkinsLogEmitterRegistry emitterRegistry;
     private final JenkinsProgressiveLogClient progressiveLogClient;
+
+    // 🔹 webhookTaskExecutor 재사용 (이미 Async 설정에 있을 거라 가정)
+    @Qualifier("webhookTaskExecutor")
+    private final Executor webhookTaskExecutor;
 
     // 내부적으로는 "deploymentId#buildNumber" 기준으로 스트리밍 상태 관리
     private final Map<String, Boolean> streamingInProgress = new ConcurrentHashMap<>();
@@ -69,22 +74,30 @@ public class JenkinsConsoleStreamingService {
         } catch (Exception ignored) {}
 
         // 4) 스트리밍 루프 시작 (이미 돌고 있으면 skip)
-        startStreamingIfNeeded(session);
+        startStreamingIfNeeded(session);   // ⚠️ 여기서 이제 비동기 실행만 트리거
 
-        return emitter;
+        return emitter;  // 🔹 컨트롤러는 여기까지 실행되고 바로 리턴해야 함
     }
 
-    private synchronized void startStreamingIfNeeded(BuildSession session) {
+    private void startStreamingIfNeeded(BuildSession session) {
         String cacheKey = key(session.getDeploymentId(), session.getBuildNumber());
-        if (Boolean.TRUE.equals(streamingInProgress.get(cacheKey))) {
-            return; // 이미 스트리밍 중
+        // 이미 돌고 있으면 패스
+        if (Boolean.TRUE.equals(streamingInProgress.putIfAbsent(cacheKey, true))) {
+            return;
         }
-        streamingInProgress.put(cacheKey, true);
-        startStreaming(session);
+
+        // 🔹 여기서부터는 별도 쓰레드에서 while 루프를 돌린다
+        webhookTaskExecutor.execute(() -> {
+            try {
+                doStreaming(session);
+            } finally {
+                streamingInProgress.remove(cacheKey);
+            }
+        });
     }
 
-    @Async("webhookTaskExecutor")
-    public void startStreaming(BuildSession session) {
+    // ⛔ @Async 제거!!
+    private void doStreaming(BuildSession session) {
         Long deploymentId = session.getDeploymentId();
         String jobName    = session.getJobName();
         int buildNumber   = session.getBuildNumber();
@@ -98,22 +111,27 @@ public class JenkinsConsoleStreamingService {
 
         try {
             while (true) {
+                // 1) 구독자가 한 명도 없으면 중단
                 if (!emitterRegistry.hasEmitters(cacheKey)) {
                     log.info("[JenkinsStreaming] no subscribers, stop depId={}, build={}",
                             deploymentId, buildNumber);
                     break;
                 }
 
+                // 2) progressiveText에서 한 번씩 chunk 가져오기
                 var chunk = progressiveLogClient.fetchChunk(jobName, buildNumber, start);
 
                 String cleaned = AnsiAndHiddenCleaner.clean(chunk.text());
                 if (!cleaned.isEmpty()) {
                     buffer.append(cleaned, chunk.nextStart());
                     emitterRegistry.sendLog(cacheKey, cleaned);
+                    log.info("[JenkinsStreaming] chunk depId={}, build={}, len={}, nextStart={}, hasMore={}",
+                            deploymentId, buildNumber, cleaned.length(), chunk.nextStart(), chunk.hasMore());
                 }
 
                 start = chunk.nextStart();
 
+                // 3) 더 이상 로그가 없으면 (hasMore=false)
                 if (!chunk.hasMore()) {
                     buffer.markCompleted();
                     buildSessionRegistry.markCompleted(deploymentId);
@@ -121,7 +139,6 @@ public class JenkinsConsoleStreamingService {
                     emitterRegistry.sendComplete(cacheKey, "UNKNOWN");
                     log.info("[JenkinsStreaming] finished depId={}, build={}",
                             deploymentId, buildNumber);
-
                     break;
                 }
 
@@ -134,8 +151,6 @@ public class JenkinsConsoleStreamingService {
         } catch (Exception e) {
             log.error("[JenkinsStreaming] error depId={}, build={}, ex={}",
                     deploymentId, buildNumber, e.getMessage(), e);
-        } finally {
-            streamingInProgress.remove(cacheKey);
         }
     }
 }
