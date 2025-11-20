@@ -2,6 +2,7 @@ package sys.be4man.domains.analysis.util;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -36,6 +37,9 @@ public final class JenkinsConsoleLogParser {
     private static final Pattern ANSI_CSI =
             Pattern.compile("\\u001B\\[[0-9;?]*[ -/]*[@-~]");
 
+    private static final Set<String> INTERNAL_STAGES = Set.of("Notify Build Start");
+
+
     /** 결과 모델 */
     public record StageBlock(int orderIndex, String name, String log, boolean success) {}
 
@@ -63,6 +67,15 @@ public final class JenkinsConsoleLogParser {
             Matcher close = STAGE_CLOSE.matcher(line);
 
             if (open.find()) {
+                String stageName = open.group(1);
+
+                // 내부용 Stage면 파싱에서 완전히 무시
+                if (INTERNAL_STAGES.contains(stageName)) {
+                    currentName = null;
+                    buf.clear();
+                    continue;
+                }
+
                 // 이전 스테이지가 닫히지 않은 채로 새 스테이지가 열리면 강제 마감
                 if (currentName != null) {
                     result.add(buildStage(++orderIndex, currentName, buf));

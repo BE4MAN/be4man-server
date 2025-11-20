@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import sys.be4man.domains.analysis.dto.request.JenkinsBuildStartRequest;
 import sys.be4man.domains.analysis.dto.response.JenkinsWebhooksResponseDto;
 import sys.be4man.domains.analysis.service.LogService;
 import sys.be4man.domains.analysis.service.WebhookService;
@@ -28,6 +29,7 @@ public class JenkinsWebhookController {
     private static final String JENKINS_WEBHOOK_ENDPOINT = "/jenkins";
     private static final Logger log = LoggerFactory.getLogger(JenkinsWebhookController.class);
     private final LogService logService;
+    private final WebhookService webhookService;
 
     @PostMapping(JENKINS_WEBHOOK_ENDPOINT)
     public ResponseEntity<String> handleJenkinsWebhook(@RequestBody JenkinsWebhooksResponseDto jenkinsData) {
@@ -48,5 +50,12 @@ public class JenkinsWebhookController {
 
         // 5. Jenkins에게 성공 응답 반환
         return ResponseEntity.ok("Jenkins webhook data received and processed successfully.");
+    }
+
+
+    @PostMapping(JENKINS_WEBHOOK_ENDPOINT + "/start")
+    public ResponseEntity<Void> onBuildStart(@RequestBody JenkinsBuildStartRequest request) {
+        webhookService.onBuildStart(request);
+        return ResponseEntity.ok().build();
     }
 }
