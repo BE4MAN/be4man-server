@@ -13,6 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -74,5 +75,28 @@ public class AccountController {
             @RequestParam(name = "keyword", required = false) String keyword
     ) {
         return ResponseEntity.ok(accountService.searchApprovalLineAccounts(department, keyword));
+    }
+
+    /**
+     * 계정 단건 조회
+     */
+    @Operation(
+            summary = "계정 단건 조회",
+            description = "accountId로 특정 계정 정보를 조회합니다."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "조회 성공",
+                    content = @Content(schema = @Schema(implementation = AccountInfoResponse.class))),
+            @ApiResponse(responseCode = "401", description = "인증되지 않은 사용자",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "404", description = "계정을 찾을 수 없음",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    @SecurityRequirement(name = "Bearer Authentication")
+    @GetMapping("/{accountId}")
+    public ResponseEntity<AccountInfoResponse> getAccountById(
+            @PathVariable Long accountId
+    ) {
+        return ResponseEntity.ok(accountService.getAccountById(accountId));
     }
 }
