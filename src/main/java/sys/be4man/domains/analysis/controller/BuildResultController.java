@@ -10,7 +10,9 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import sys.be4man.domains.analysis.dto.response.BuildResultResponseDto;
+import sys.be4man.domains.analysis.dto.response.DeploymentStageAndStatusResponseDto;
 import sys.be4man.domains.analysis.service.BuildRunService;
+import sys.be4man.domains.deployment.service.DeploymentService;
 
 /**
  * 빌드 결과 컨트롤러
@@ -23,6 +25,7 @@ import sys.be4man.domains.analysis.service.BuildRunService;
 public class BuildResultController {
 
     private final BuildRunService buildRunService;
+    private final DeploymentService deploymentService;
 
     @GetMapping("/{deploymentId}")
     public ResponseEntity<List<BuildResultResponseDto>> getAllBuildResultsByDeploymentId(@PathVariable Long deploymentId){
@@ -33,6 +36,11 @@ public class BuildResultController {
     public ResponseEntity<BuildResultResponseDto> getBuildResultByDeploymentIdAndBuildRunId(@PathVariable Long deploymentId,
             @PathVariable Long buildRunId){
         return ResponseEntity.ok(buildRunService.getBuildResultByDeploymentIdAndBuildRunId(deploymentId, buildRunId));
+    }
+
+    @GetMapping("deployment-status/{deploymentId}")
+    public ResponseEntity<DeploymentStageAndStatusResponseDto> getBuildStageAndStatus(@PathVariable Long deploymentId){
+        return ResponseEntity.ok(deploymentService.getBuildStageAndStatus(deploymentId));
     }
 
 }
