@@ -27,6 +27,7 @@ import sys.be4man.domains.analysis.util.DurationParser;
 import sys.be4man.domains.analysis.util.IsoLocalDateTimeParser;
 import sys.be4man.domains.analysis.util.JenkinsConsoleLogParser;
 import sys.be4man.domains.analysis.util.JenkinsConsoleLogParser.StageBlock;
+import sys.be4man.domains.deployment.model.type.DeploymentResult;
 import sys.be4man.domains.deployment.repository.DeploymentRepository;
 import sys.be4man.domains.deployment.exception.type.DeploymentExceptionType;
 import sys.be4man.domains.deployment.model.entity.Deployment;
@@ -42,6 +43,7 @@ public class JenkinsLogServiceImpl implements LogService {
     private final BuildRunRepository buildRunRepository;
     private final StageRunRepository stageRunRepository;
     private final StageAnalysisService stageAnalysisService;
+    private final WebhookService webhookService;
 
     @Value("${jenkins.url}")
     private String jenkinsUrl;
@@ -64,7 +66,8 @@ public class JenkinsLogServiceImpl implements LogService {
             // Basic Auth 헤더
             HttpHeaders headers = new HttpHeaders();
             String auth = jenkinsUsername + ":" + jenkinsPassword;
-            String encodedAuth = Base64.getEncoder().encodeToString(auth.getBytes(StandardCharsets.UTF_8));
+            String encodedAuth = Base64.getEncoder()
+                    .encodeToString(auth.getBytes(StandardCharsets.UTF_8));
             headers.set("Authorization", "Basic " + encodedAuth);
 
             // progressiveText 엔드포인트
@@ -108,7 +111,9 @@ public class JenkinsLogServiceImpl implements LogService {
 
                 // 다음 루프를 위해 포인터 이동, 너무 빠른 폴링 방지 딜레이
                 start = nextStart;
-                try { Thread.sleep(250L); } catch (InterruptedException ie) {
+                try {
+                    Thread.sleep(250L);
+                } catch (InterruptedException ie) {
                     Thread.currentThread().interrupt();
                     break;
                 }
@@ -133,61 +138,64 @@ public class JenkinsLogServiceImpl implements LogService {
         final Long deploymentId = jenkinsData.deploymentId();
         final String jobName = jenkinsData.jobName();
         final String buildNumber = jenkinsData.buildNumber();
+        LocalDateTime startedAt = null;
+        LocalDateTime endedAt = null;
 
         try {
-            // 1) 우선 웹훅에 실린 값으로 시각 확정 시도
-            LocalDateTime startedAt = parseIsoOrNull(jenkinsData.startTime());
-            LocalDateTime endedAt   = parseIsoOrNull(jenkinsData.endTime());
-            Long durSecFromWebhook  = parseDurationSeconds(jenkinsData.duration()); // "and counting"이면 null
-
-            if (startedAt == null && endedAt != null && durSecFromWebhook != null) {
-                startedAt = endedAt.minusSeconds(durSecFromWebhook);
-            } else if (endedAt == null && startedAt != null && durSecFromWebhook != null) {
-                endedAt = startedAt.plusSeconds(durSecFromWebhook);
-            }
 
             // 2) 여전히 started/ended 확정이 안 되면: Jenkins Build JSON API를 5초마다 폴링
-            if (startedAt == null || endedAt == null) {
-                final int MAX_MINUTES = 10;       // 최대 대기 10분 (필요시 조정/설정값화)
-                final int SLEEP_MS = 5000;        // 5초 간격
-                final long deadline = System.currentTimeMillis() + MAX_MINUTES * 60_000L;
+            final int MAX_MINUTES = 10;       // 최대 대기 10분 (필요시 조정/설정값화)
+            final int SLEEP_MS = 5000;        // 5초 간격
+            final long deadline = System.currentTimeMillis() + MAX_MINUTES * 60_000L;
 
-                while (System.currentTimeMillis() < deadline) {
-                    BuildMeta meta = fetchBuildMeta(jobName, buildNumber);
-                    if (meta != null && !meta.building) {
-                        // Jenkins API: timestamp(ms) = 시작시각, duration(ms) = 총 소요
-                        LocalDateTime start = LocalDateTime.ofInstant(
-                                java.time.Instant.ofEpochMilli(meta.timestamp),
-                                java.time.ZoneOffset.UTC);
-                        LocalDateTime end = start.plusNanos(java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(meta.durationMs));
-                        startedAt = (startedAt == null) ? start : startedAt;
-                        endedAt   = (endedAt   == null) ? end   : endedAt;
-                        log.info("Jenkins build finished via polling. job={}, build={}, startedAt={}, endedAt={}, result={}",
-                                jobName, buildNumber, startedAt, endedAt, meta.result);
-                        break;
-                    }
-                    try { Thread.sleep(SLEEP_MS); } catch (InterruptedException ie) {
-                        Thread.currentThread().interrupt();
-                        break;
-                    }
+            while (System.currentTimeMillis() < deadline) {
+                BuildMeta meta = fetchBuildMeta(jobName, buildNumber);
+                if (meta != null && !meta.building) {
+
+                    Boolean isDeployed = DeploymentResult.fromJenkinsStatus(meta.result)
+                            .getIsDeployed();
+                    webhookService.setDeployResult(jenkinsData, isDeployed);
+
+                    // Jenkins API: timestamp(ms) = 시작시각, duration(ms) = 총 소요
+                    LocalDateTime start = LocalDateTime.ofInstant(
+                            java.time.Instant.ofEpochMilli(meta.timestamp),
+                            java.time.ZoneOffset.UTC);
+                    LocalDateTime end = start.plusNanos(
+                            java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(
+                                    meta.durationMs));
+                    startedAt = (startedAt == null) ? start : startedAt;
+                    endedAt = (endedAt == null) ? end : endedAt;
+                    log.info(
+                            "Jenkins build finished via polling. job={}, build={}, startedAt={}, endedAt={}, result={}",
+                            jobName, buildNumber, startedAt, endedAt, meta.result);
+                    break;
+                }
+                try {
+                    Thread.sleep(SLEEP_MS);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    break;
                 }
             }
 
             // 3) 그래도 확정 못했으면 (예: 타임아웃) 저장 스킵
             if (startedAt == null || endedAt == null) {
-                log.warn("[Skip Persist] started_at/ended_at 미확정 (타임아웃/진행중). depId={}, job={}, build={}, duration='{}'",
+                log.warn(
+                        "[Skip Persist] started_at/ended_at 미확정 (타임아웃/진행중). depId={}, job={}, build={}, duration='{}'",
                         deploymentId, jobName, buildNumber, jenkinsData.duration());
                 return;
             }
 
             // 4) 이제 최종 로그(완료본) 수집 → 스테이지 파싱
             String fullLog = fetchConsoleLog(jobName, buildNumber); // progressiveText로 완료본 취득
-            List<JenkinsConsoleLogParser.StageBlock> stages = JenkinsConsoleLogParser.parse(fullLog);
+            List<JenkinsConsoleLogParser.StageBlock> stages = JenkinsConsoleLogParser.parse(
+                    fullLog);
             fullLog = AnsiAndHiddenCleaner.clean(fullLog);
 
             // 5) 엔티티 조회
             Deployment deployment = deploymentRepository.findByIdAndIsDeletedFalse(deploymentId)
-                    .orElseThrow(() -> new NotFoundException(DeploymentExceptionType.DEPLOYMENT_NOT_FOUND));
+                    .orElseThrow(() -> new NotFoundException(
+                            DeploymentExceptionType.DEPLOYMENT_NOT_FOUND));
 
             long durationSeconds = java.time.Duration.between(startedAt, endedAt).getSeconds();
 
@@ -196,10 +204,11 @@ public class JenkinsLogServiceImpl implements LogService {
                     .deployment(deployment)
                     .buildNumber(Long.parseLong(buildNumber))
                     .jenkinsJobName(jobName)
-                    .duration((Long)Math.max(0, durationSeconds))
+                    .duration((Long) Math.max(0, durationSeconds))
                     .startedAt(startedAt)
                     .endedAt(endedAt)
                     .log(fullLog)
+                    .isBuild(deployment.getIsDeployed())
                     .build();
             buildRunRepository.save(buildRun);
 
@@ -219,21 +228,26 @@ public class JenkinsLogServiceImpl implements LogService {
             var failedStages = stageEntities.stream().filter(sr -> !sr.getIsSuccess()).toList();
             stageAnalysisService.analyzeFailedStages(failedStages);
 
-            log.info("[Persist OK] BuildRun/StageRun 저장 완료. depId={}, job={}, build={}, startedAt={}, endedAt={}",
+            log.info(
+                    "[Persist OK] BuildRun/StageRun 저장 완료. depId={}, job={}, build={}, startedAt={}, endedAt={}",
                     deploymentId, jobName, buildNumber, startedAt, endedAt);
 
         } catch (RuntimeException e) {
-            log.error("[Async Failure] depId={}, job={}, build={} 처리 중 오류: {}", deploymentId, jobName, buildNumber, e.getMessage(), e);
+            log.error("[Async Failure] depId={}, job={}, build={} 처리 중 오류: {}", deploymentId,
+                    jobName, buildNumber, e.getMessage(), e);
             throw e;
         }
     }
 
-    /** Jenkins Build JSON API 조회 (building, timestamp, duration, result) */
+    /**
+     * Jenkins Build JSON API 조회 (building, timestamp, duration, result)
+     */
     private BuildMeta fetchBuildMeta(String jobName, String buildNumber) {
         try {
             HttpHeaders headers = new HttpHeaders();
             String auth = jenkinsUsername + ":" + jenkinsPassword;
-            String encodedAuth = Base64.getEncoder().encodeToString(auth.getBytes(StandardCharsets.UTF_8));
+            String encodedAuth = Base64.getEncoder()
+                    .encodeToString(auth.getBytes(StandardCharsets.UTF_8));
             headers.set("Authorization", "Basic " + encodedAuth);
 
             // 예: https://JENKINS/job/{job}/{build}/api/json?tree=building,timestamp,duration,result
@@ -243,8 +257,10 @@ public class JenkinsLogServiceImpl implements LogService {
             ResponseEntity<java.util.Map> resp = restTemplate.exchange(
                     url, HttpMethod.GET, new HttpEntity<>(headers), java.util.Map.class);
 
-            java.util.Map<?,?> map = resp.getBody();
-            if (map == null) return null;
+            java.util.Map<?, ?> map = resp.getBody();
+            if (map == null) {
+                return null;
+            }
 
             boolean building = Boolean.TRUE.equals(map.get("building"));
             Number ts = (Number) map.get("timestamp"); // epoch millis (start)
@@ -259,17 +275,22 @@ public class JenkinsLogServiceImpl implements LogService {
             // 빌드 직후 곧바로 조회하면 404일 수 있음 → 폴링 계속
             return null;
         } catch (Exception e) {
-            log.warn("fetchBuildMeta 실패: job={}, build={}, err={}", jobName, buildNumber, e.getMessage());
+            log.warn("fetchBuildMeta 실패: job={}, build={}, err={}", jobName, buildNumber,
+                    e.getMessage());
             return null;
         }
     }
 
-    /** 빌드 메타 정보 */
+    /**
+     * 빌드 메타 정보
+     */
     private static final class BuildMeta {
+
         final boolean building;
         final long timestamp;   // ms (시작시각)
         final long durationMs;  // ms (총 소요)
         final String result;
+
         BuildMeta(boolean building, long timestamp, long durationMs, String result) {
             this.building = building;
             this.timestamp = timestamp;
@@ -278,10 +299,14 @@ public class JenkinsLogServiceImpl implements LogService {
         }
     }
 
-    /** ====== 유틸 메서드 (클래스 내부 private static) ====== */
+    /**
+     * ====== 유틸 메서드 (클래스 내부 private static) ======
+     */
 
     private static LocalDateTime parseIsoOrNull(String s) {
-        if (s == null || s.isBlank()) return null;
+        if (s == null || s.isBlank()) {
+            return null;
+        }
         try {
             // Jenkinsfile에서 UTC로 'Z' 붙여 보내는 경우를 가정
             // 예: 2025-11-03T06:44:33.123Z
@@ -292,10 +317,14 @@ public class JenkinsLogServiceImpl implements LogService {
     }
 
     private static Long parseDurationSeconds(String s) {
-        if (s == null) return null;
+        if (s == null) {
+            return null;
+        }
         // "1 min 58 sec" 또는 "22 sec" 등 대응, "and counting"이면 null 리턴
         String lower = s.toLowerCase();
-        if (lower.contains("and counting")) return null;
+        if (lower.contains("and counting")) {
+            return null;
+        }
         java.util.regex.Matcher m = java.util.regex.Pattern
                 .compile("(?:(\\d+)\\s*min\\s*)?(\\d+)\\s*sec\\b")
                 .matcher(lower);

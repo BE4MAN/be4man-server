@@ -77,6 +77,13 @@ public class AccountServiceImpl implements AccountService {
                 .collect(Collectors.toList());
     }
 
+    @Override
+    public AccountInfoResponse getAccountById(Long accountId) {
+        var account = accountRepository.findById(accountId)
+                .orElseThrow(() -> new IllegalArgumentException("Account not found: " + accountId));
+        return AccountInfoResponse.from(account);
+    }
+
     private String safe(String s) {
         return s == null ? "" : s;
     }

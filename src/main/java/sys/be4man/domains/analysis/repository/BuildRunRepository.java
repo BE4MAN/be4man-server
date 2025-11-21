@@ -9,5 +9,7 @@ public interface BuildRunRepository extends JpaRepository<BuildRun, Long>, Build
 
     Optional<BuildRun> findByDeploymentIdAndIdAndIsDeletedFalse(Long deploymentId, Long buildRunId);
 
+    Optional<BuildRun> findByDeploymentIdAndIsDeletedFalse(Long taskId);
+
     List<BuildRun> findByDeploymentIdIn(List<Long> deploymentIds);
 }
