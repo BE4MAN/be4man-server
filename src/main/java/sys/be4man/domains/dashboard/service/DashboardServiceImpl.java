@@ -422,7 +422,9 @@ public class DashboardServiceImpl implements DashboardService {
                     List<BuildRun> buildRuns = buildRunsMap.getOrDefault(deployment.getId(), List.of());
 
                     String duration = null;
-                    LocalDateTime recoveredAt = null;
+                    Integer buildRunDuration = null;
+                    LocalDateTime recoveredAt = deployment.getUpdatedAt();
+                    LocalDateTime updatedAt = deployment.getUpdatedAt();
 
                     if ("COMPLETED".equals(status) && !buildRuns.isEmpty()) {
                         // duration 계산: 첫 번째 buildRun.startedAt ~ 마지막 buildRun.endedAt
@@ -442,8 +444,10 @@ public class DashboardServiceImpl implements DashboardService {
                             long minutes = durationBetween.toMinutes();
                             duration = minutes + "분";
 
-                            // recoveredAt: 마지막 buildRun.endedAt
-                            recoveredAt = lastBuildRun.getEndedAt();
+                            // buildRunDuration: 마지막 BuildRun의 duration (밀리초 -> 초 단위 변환)
+                            if (lastBuildRun.getDuration() != null) {
+                                buildRunDuration = (int) (lastBuildRun.getDuration() / 1000);
+                            }
                         }
                     }
 
@@ -453,7 +457,9 @@ public class DashboardServiceImpl implements DashboardService {
                             deployment.getProject().getName(),
                             status,
                             duration,
+                            buildRunDuration,
                             recoveredAt,
+                            updatedAt,
                             deployment.getIssuer().getName(),
                             deployment.getIssuer().getDepartment().getKoreanName(),
                             deployment.getId()

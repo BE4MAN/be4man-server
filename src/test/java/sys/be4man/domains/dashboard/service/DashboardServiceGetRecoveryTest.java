@@ -93,6 +93,7 @@ class DashboardServiceGetRecoveryTest {
                 .build();
         ReflectionTestUtils.setField(completedDeployment, "id", 201L);
         ReflectionTestUtils.setField(completedDeployment, "createdAt", LocalDateTime.of(2025, 10, 29, 15, 0));
+        ReflectionTestUtils.setField(completedDeployment, "updatedAt", LocalDateTime.of(2025, 10, 29, 16, 10));
 
         // IN_PROGRESS 상태
         inProgressDeployment = Deployment.builder()
@@ -106,6 +107,7 @@ class DashboardServiceGetRecoveryTest {
                 .build();
         ReflectionTestUtils.setField(inProgressDeployment, "id", 202L);
         ReflectionTestUtils.setField(inProgressDeployment, "createdAt", LocalDateTime.of(2025, 10, 28, 10, 0));
+        ReflectionTestUtils.setField(inProgressDeployment, "updatedAt", LocalDateTime.of(2025, 10, 28, 11, 0));
 
         // PENDING 상태
         pendingDeployment = Deployment.builder()
@@ -119,6 +121,7 @@ class DashboardServiceGetRecoveryTest {
                 .build();
         ReflectionTestUtils.setField(pendingDeployment, "id", 203L);
         ReflectionTestUtils.setField(pendingDeployment, "createdAt", LocalDateTime.of(2025, 10, 27, 9, 0));
+        ReflectionTestUtils.setField(pendingDeployment, "updatedAt", LocalDateTime.of(2025, 10, 27, 9, 30));
 
         // BuildRun 설정 (COMPLETED용)
         firstBuildRun = BuildRun.builder()
@@ -126,7 +129,7 @@ class DashboardServiceGetRecoveryTest {
                 .jenkinsJobName("test-job")
                 .buildNumber(1L)
                 .log("Build log")
-                .duration(1000L)
+                .duration(1000L) // 1초 (밀리초)
                 .startedAt(LocalDateTime.of(2025, 10, 29, 15, 22))
                 .endedAt(LocalDateTime.of(2025, 10, 29, 15, 30))
                 .build();
@@ -137,7 +140,7 @@ class DashboardServiceGetRecoveryTest {
                 .jenkinsJobName("test-job")
                 .buildNumber(2L)
                 .log("Build log")
-                .duration(2000L)
+                .duration(120000L) // 120초 (밀리초) = 2분
                 .startedAt(LocalDateTime.of(2025, 10, 29, 15, 50))
                 .endedAt(LocalDateTime.of(2025, 10, 29, 16, 4))
                 .build();
@@ -174,7 +177,9 @@ class DashboardServiceGetRecoveryTest {
         assertThat(recovery.service()).isEqualTo("결제 서비스");
         assertThat(recovery.status()).isEqualTo("COMPLETED");
         assertThat(recovery.duration()).isEqualTo("42분"); // 15:22 ~ 16:04 = 42분
-        assertThat(recovery.recoveredAt()).isEqualTo(LocalDateTime.of(2025, 10, 29, 16, 4));
+        assertThat(recovery.buildRunDuration()).isEqualTo(120); // 마지막 BuildRun의 duration: 120000ms / 1000 = 120초
+        assertThat(recovery.recoveredAt()).isEqualTo(completedDeployment.getUpdatedAt());
+        assertThat(recovery.updatedAt()).isEqualTo(completedDeployment.getUpdatedAt());
         assertThat(recovery.registrant()).isEqualTo("홍길동");
         assertThat(recovery.registrantDepartment()).isEqualTo("IT");
         assertThat(recovery.deploymentId()).isEqualTo(201L);
@@ -200,7 +205,9 @@ class DashboardServiceGetRecoveryTest {
         RecoveryResponse recovery = result.data().get(0);
         assertThat(recovery.status()).isEqualTo("IN_PROGRESS");
         assertThat(recovery.duration()).isNull();
-        assertThat(recovery.recoveredAt()).isNull();
+        assertThat(recovery.buildRunDuration()).isNull();
+        assertThat(recovery.recoveredAt()).isEqualTo(inProgressDeployment.getUpdatedAt());
+        assertThat(recovery.updatedAt()).isEqualTo(inProgressDeployment.getUpdatedAt());
     }
 
     @Test
@@ -223,7 +230,9 @@ class DashboardServiceGetRecoveryTest {
         RecoveryResponse recovery = result.data().get(0);
         assertThat(recovery.status()).isEqualTo("PENDING");
         assertThat(recovery.duration()).isNull();
-        assertThat(recovery.recoveredAt()).isNull();
+        assertThat(recovery.buildRunDuration()).isNull();
+        assertThat(recovery.recoveredAt()).isEqualTo(pendingDeployment.getUpdatedAt());
+        assertThat(recovery.updatedAt()).isEqualTo(pendingDeployment.getUpdatedAt());
     }
 
     @Test
@@ -319,7 +328,9 @@ class DashboardServiceGetRecoveryTest {
         RecoveryResponse recovery = result.data().get(0);
         assertThat(recovery.status()).isEqualTo("COMPLETED");
         assertThat(recovery.duration()).isNull(); // BuildRun이 없으면 duration도 null
-        assertThat(recovery.recoveredAt()).isNull(); // BuildRun이 없으면 recoveredAt도 null
+        assertThat(recovery.buildRunDuration()).isNull(); // BuildRun이 없으면 buildRunDuration도 null
+        assertThat(recovery.recoveredAt()).isEqualTo(completedDeployment.getUpdatedAt());
+        assertThat(recovery.updatedAt()).isEqualTo(completedDeployment.getUpdatedAt());
     }
 }
 
