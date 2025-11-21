@@ -37,6 +37,9 @@ import sys.be4man.global.exception.NotFoundException;
 @Service
 public class JenkinsLogServiceImpl implements LogService {
 
+    private static final java.time.ZoneId ZONE_SEOUL = java.time.ZoneId.of("Asia/Seoul");
+
+
     private static final Logger log = LoggerFactory.getLogger(JenkinsLogServiceImpl.class);
     private final RestTemplate restTemplate;
     private final DeploymentRepository deploymentRepository;
@@ -156,13 +159,14 @@ public class JenkinsLogServiceImpl implements LogService {
                             .getIsDeployed();
                     webhookService.setDeployResult(jenkinsData, isDeployed);
 
-                    // Jenkins API: timestamp(ms) = 시작시각, duration(ms) = 총 소요
-                    LocalDateTime start = LocalDateTime.ofInstant(
-                            java.time.Instant.ofEpochMilli(meta.timestamp),
-                            java.time.ZoneOffset.UTC);
+
+                    LocalDateTime start = java.time.Instant.ofEpochMilli(meta.timestamp)
+                            .atZone(ZONE_SEOUL)
+                            .toLocalDateTime();
+
                     LocalDateTime end = start.plusNanos(
-                            java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(
-                                    meta.durationMs));
+                            java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(meta.durationMs));
+
                     startedAt = (startedAt == null) ? start : startedAt;
                     endedAt = (endedAt == null) ? end : endedAt;
                     log.info(
