@@ -25,6 +25,7 @@ import sys.be4man.domains.ban.model.type.RecurrenceWeekday;
 import sys.be4man.domains.ban.repository.BanRepository;
 import sys.be4man.domains.ban.repository.ProjectBanRepository;
 import sys.be4man.domains.deployment.model.entity.Deployment;
+import sys.be4man.domains.deployment.model.type.DeploymentStage;
 import sys.be4man.domains.deployment.model.type.DeploymentStatus;
 import sys.be4man.domains.deployment.repository.DeploymentRepository;
 import sys.be4man.domains.project.model.entity.Project;
@@ -223,12 +224,13 @@ public class ScheduleServiceImpl implements ScheduleService {
         // 단방향 관계: project_id IN deploymentProjectIds인 경우의 relatedProject만 조회
         Map<Long, List<String>> projectRelatedServicesMap = buildProjectRelatedServicesMap(deploymentProjectIds);
 
-        // 각 Deployment별로 관련 프로젝트 이름 목록 생성
+        // 각 Deployment별로 관련 프로젝트 이름 목록 생성 및 isDeployed 계산
         return deployments.stream()
                 .map(deployment -> {
                     Long projectId = deployment.getProject().getId();
                     List<String> relatedServices = projectRelatedServicesMap.getOrDefault(projectId, List.of());
-                    return DeploymentScheduleResponse.from(deployment, relatedServices);
+                    Boolean isDeployed = calculateIsDeployed(deployment);
+                    return DeploymentScheduleResponse.from(deployment, relatedServices, isDeployed);
                 })
                 .toList();
     }
@@ -435,6 +437,28 @@ public class ScheduleServiceImpl implements ScheduleService {
         if (role == Role.DEVELOPER) {
             throw new ForbiddenException(ScheduleExceptionType.INSUFFICIENT_PERMISSION);
         }
+    }
+
+    /**
+     * isDeployed 값 계산
+     * - stage가 PLAN이면 → null
+     * - stage가 DEPLOYMENT이고 status가 PENDING이면 → null
+     * - 그 외의 경우는 deployment.isDeployed 사용
+     */
+    private Boolean calculateIsDeployed(Deployment deployment) {
+        // stage가 PLAN이면 null
+        if (deployment.getStage() == DeploymentStage.PLAN) {
+            return null;
+        }
+
+        // stage가 DEPLOYMENT이고 status가 PENDING이면 null
+        if (deployment.getStage() == DeploymentStage.DEPLOYMENT
+                && deployment.getStatus() == DeploymentStatus.PENDING) {
+            return null;
+        }
+
+        // 그 외의 경우는 deployment.isDeployed 사용
+        return deployment.getIsDeployed();
     }
 }
 

@@ -43,6 +43,17 @@ public record DeploymentScheduleResponse(
      * - relatedServices: 관련 서비스(프로젝트) 이름 목록
      */
     public static DeploymentScheduleResponse from(Deployment deployment, List<String> relatedServices) {
+        return from(deployment, relatedServices, deployment.getIsDeployed());
+    }
+
+    /**
+     * Deployment 엔티티와 관련 서비스 목록, isDeployed 값으로부터 DeploymentScheduleResponse 생성
+     * - status: DeploymentStatus enum 이름 (PENDING, REJECTED, IN_PROGRESS, CANCELED, COMPLETED, APPROVED)
+     * - stage: DeploymentStage enum 이름 (PLAN, DEPLOYMENT, REPORT, etc.)
+     * - isDeployed: 계산된 isDeployed 값 (stage와 status 기반)
+     * - relatedServices: 관련 서비스(프로젝트) 이름 목록
+     */
+    public static DeploymentScheduleResponse from(Deployment deployment, List<String> relatedServices, Boolean isDeployed) {
         String registrant = deployment.getIssuer() != null ? deployment.getIssuer().getName() : null;
         String registrantDepartment = (deployment.getIssuer() != null
                 && deployment.getIssuer().getDepartment() != null)
@@ -54,7 +65,7 @@ public record DeploymentScheduleResponse(
                 .title(deployment.getTitle())
                 .status(deployment.getStatus().name())
                 .stage(deployment.getStage().name())
-                .isDeployed(deployment.getIsDeployed())
+                .isDeployed(isDeployed)
                 .projectName(deployment.getProject().getName())
                 .relatedServices(relatedServices)
                 .scheduledDate(deployment.getScheduledAt().toLocalDate())
