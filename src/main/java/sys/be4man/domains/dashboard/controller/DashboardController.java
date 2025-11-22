@@ -1,0 +1,122 @@
+package sys.be4man.domains.dashboard.controller;
+
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import java.util.List;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.RequestParam;
+import sys.be4man.domains.auth.dto.AccountPrincipal;
+import sys.be4man.domains.dashboard.dto.response.InProgressTaskResponse;
+import sys.be4man.domains.dashboard.dto.response.NotificationResponse;
+import sys.be4man.domains.dashboard.dto.response.PaginationResponse;
+import sys.be4man.domains.dashboard.dto.response.PendingApprovalResponse;
+import sys.be4man.domains.dashboard.dto.response.RecoveryResponse;
+import sys.be4man.domains.dashboard.service.DashboardService;
+import sys.be4man.global.dto.response.ErrorResponse;
+
+/**
+ * 홈(Dashboard) 페이지 API 컨트롤러
+ */
+@Tag(name = "Dashboard", description = "홈(Dashboard) 페이지 API")
+@Slf4j
+@RestController
+@RequestMapping("/api/dashboard")
+@RequiredArgsConstructor
+public class DashboardController {
+
+    private final DashboardService dashboardService;
+
+    /**
+     * 승인 대기 목록 조회
+     */
+    @Operation(summary = "승인 대기 목록 조회", description = "현재 사용자가 승인해야 하는 approval 리스트를 조회합니다.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "조회 성공",
+                    content = @Content(schema = @Schema(implementation = PendingApprovalResponse.class))),
+            @ApiResponse(responseCode = "401", description = "인증되지 않은 사용자",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    @SecurityRequirement(name = "Bearer Authentication")
+    @GetMapping("/pending-approvals")
+    public ResponseEntity<List<PendingApprovalResponse>> getPendingApprovals(
+            @AuthenticationPrincipal AccountPrincipal principal
+    ) {
+        log.info("승인 대기 목록 조회 요청 - accountId: {}", principal.accountId());
+        List<PendingApprovalResponse> response = dashboardService.getPendingApprovals(principal.accountId());
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * 진행중인 업무 목록 조회
+     */
+    @Operation(summary = "진행중인 업무 목록 조회", description = "현재 사용자가 승인한 deployment 중, 진행중인 상태인 항목을 조회합니다.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "조회 성공",
+                    content = @Content(schema = @Schema(implementation = InProgressTaskResponse.class))),
+            @ApiResponse(responseCode = "401", description = "인증되지 않은 사용자",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    @SecurityRequirement(name = "Bearer Authentication")
+    @GetMapping("/in-progress-tasks")
+    public ResponseEntity<List<InProgressTaskResponse>> getInProgressTasks(
+            @AuthenticationPrincipal AccountPrincipal principal
+    ) {
+        log.info("진행중인 업무 목록 조회 요청 - accountId: {}", principal.accountId());
+        List<InProgressTaskResponse> response = dashboardService.getInProgressTasks(principal.accountId());
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * 알림 목록 조회
+     */
+    @Operation(summary = "알림 목록 조회", description = "현재 사용자와 관련된 취소 및 반려 알림을 조회합니다.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "조회 성공",
+                    content = @Content(schema = @Schema(implementation = NotificationResponse.class))),
+            @ApiResponse(responseCode = "401", description = "인증되지 않은 사용자",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    @SecurityRequirement(name = "Bearer Authentication")
+    @GetMapping("/notifications")
+    public ResponseEntity<List<NotificationResponse>> getNotifications(
+            @AuthenticationPrincipal AccountPrincipal principal
+    ) {
+        log.info("알림 목록 조회 요청 - accountId: {}", principal.accountId());
+        List<NotificationResponse> response = dashboardService.getNotifications(principal.accountId());
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * 복구현황 목록 조회
+     */
+    @Operation(summary = "복구현황 목록 조회", description = "ROLLBACK 타입 Approval의 Deployment 목록을 페이지네이션으로 조회합니다.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "조회 성공",
+                    content = @Content(schema = @Schema(implementation = PaginationResponse.class))),
+            @ApiResponse(responseCode = "401", description = "인증되지 않은 사용자",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    @SecurityRequirement(name = "Bearer Authentication")
+    @GetMapping("/recovery")
+    public ResponseEntity<PaginationResponse<RecoveryResponse>> getRecovery(
+            @AuthenticationPrincipal AccountPrincipal principal,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "5") int pageSize
+    ) {
+        log.info("복구현황 목록 조회 요청 - accountId: {}, page: {}, pageSize: {}", principal.accountId(), page, pageSize);
+        PaginationResponse<RecoveryResponse> response = dashboardService.getRecovery(page, pageSize);
+        return ResponseEntity.ok(response);
+    }
+}
+
