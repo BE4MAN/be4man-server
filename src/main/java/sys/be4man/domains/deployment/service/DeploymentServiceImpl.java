@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import sys.be4man.domains.account.model.entity.Account;
 import sys.be4man.domains.account.repository.AccountRepository;
+import sys.be4man.domains.analysis.dto.response.DeploymentStageAndStatusResponseDto;
 import sys.be4man.domains.deployment.dto.request.DeploymentCreateRequest;
 import sys.be4man.domains.deployment.dto.response.DeploymentResponse;
 import sys.be4man.domains.deployment.model.entity.Deployment;
@@ -25,6 +26,7 @@ import sys.be4man.domains.project.model.entity.Project;
 import sys.be4man.domains.project.repository.ProjectRepository;
 import sys.be4man.domains.pullrequest.model.entity.PullRequest;
 import sys.be4man.domains.pullrequest.repository.PullRequestRepository;
+import sys.be4man.global.exception.NotFoundException;
 
 @Slf4j
 @Service
@@ -71,18 +73,23 @@ public class DeploymentServiceImpl implements DeploymentService {
 
         deploymentRepository.save(deployment);
 
-        log.info("📝 Deployment created id={}, scheduledAt={}, scheduledToEndedAt={}, expectedMinutes={}",
-                deployment.getId(), deployment.getScheduledAt(), deployment.getScheduledToEndedAt(), s.expectedMinutes);
+        log.info(
+                "📝 Deployment created id={}, scheduledAt={}, scheduledToEndedAt={}, expectedMinutes={}",
+                deployment.getId(), deployment.getScheduledAt(), deployment.getScheduledToEndedAt(),
+                s.expectedMinutes);
 
         return toDto(deployment);
     }
 
     public String buildWebhookUrl(Project project) {
-        if (project == null || project.getJenkinsIp() == null) return null;
+        if (project == null || project.getJenkinsIp() == null) {
+            return null;
+        }
         return project.getJenkinsIp() + "/job/deploy/build?token=DEPLOY_TOKEN";
     }
 
     private static class Schedule {
+
         final LocalDateTime start;
         final LocalDateTime end;
         final long expectedMinutes;
@@ -97,7 +104,9 @@ public class DeploymentServiceImpl implements DeploymentService {
     }
 
     private Schedule parseSchedule(String content) {
-        if (content == null || content.isBlank()) return new Schedule(null, null);
+        if (content == null || content.isBlank()) {
+            return new Schedule(null, null);
+        }
 
         String text = content
                 .replaceAll("(?is)<style[^>]*>.*?</style>", " ")
@@ -117,8 +126,11 @@ public class DeploymentServiceImpl implements DeploymentService {
             try {
                 LocalDateTime s = LocalDateTime.parse(rm.group(1) + " " + rm.group(2), YMDHM);
                 LocalDateTime e = LocalDateTime.parse(rm.group(3) + " " + rm.group(4), YMDHM);
-                if (!e.isBefore(s)) return new Schedule(s, e);
-            } catch (Exception ignore) {}
+                if (!e.isBefore(s)) {
+                    return new Schedule(s, e);
+                }
+            } catch (Exception ignore) {
+            }
         }
 
         try {
@@ -127,7 +139,8 @@ public class DeploymentServiceImpl implements DeploymentService {
                 LocalDateTime s = LocalDateTime.parse(sm.group(1), YMDHM);
                 return new Schedule(s, null);
             }
-        } catch (Exception ignore) { }
+        } catch (Exception ignore) {
+        }
 
         return new Schedule(null, null);
     }
@@ -151,17 +164,32 @@ public class DeploymentServiceImpl implements DeploymentService {
     @Transactional
     public void flipStageToDeploymentIfDue(Long deploymentId) {
         Deployment d = deploymentRepository.findByIdForUpdate(deploymentId)
-                .orElseThrow(() -> new IllegalArgumentException("Deployment not found. id=" + deploymentId));
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Deployment not found. id=" + deploymentId));
 
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime when = d.getScheduledAt();
 
-        if (when == null || when.isAfter(now)) return;
+        if (when == null || when.isAfter(now)) {
+            return;
+        }
 
         if (d.getStage() != DeploymentStage.DEPLOYMENT) {
             d.updateStage(DeploymentStage.DEPLOYMENT);
             d.updateStatus(DeploymentStatus.IN_PROGRESS);
         }
+    }
+
+    @Override
+    public DeploymentStageAndStatusResponseDto getBuildStageAndStatus(Long deploymentId) {
+        Deployment deployment = deploymentRepository.findByIdAndIsDeletedFalse(deploymentId)
+                .orElseThrow(
+                        NotFoundException::new);
+
+        return DeploymentStageAndStatusResponseDto.builder().stage(deployment.getStage())
+                .status(deployment.getStatus())
+                .deploymentId(deployment.getId())
+                .build();
     }
 
     private DeploymentResponse toDto(Deployment deployment) {
