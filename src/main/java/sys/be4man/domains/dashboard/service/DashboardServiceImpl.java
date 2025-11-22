@@ -423,7 +423,7 @@ public class DashboardServiceImpl implements DashboardService {
 
                     String duration = null;
                     Integer buildRunDuration = null;
-                    LocalDateTime recoveredAt = deployment.getUpdatedAt();
+                    LocalDateTime recoveredAt = null;
                     LocalDateTime updatedAt = deployment.getUpdatedAt();
 
                     if ("COMPLETED".equals(status) && !buildRuns.isEmpty()) {
@@ -448,6 +448,9 @@ public class DashboardServiceImpl implements DashboardService {
                             if (lastBuildRun.getDuration() != null) {
                                 buildRunDuration = (int) (lastBuildRun.getDuration() / 1000);
                             }
+
+                            // recoveredAt: status가 COMPLETED일 때만 deployment.updatedAt 사용
+                            recoveredAt = deployment.getUpdatedAt();
                         }
                     }
 

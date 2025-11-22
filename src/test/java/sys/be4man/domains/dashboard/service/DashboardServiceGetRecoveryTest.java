@@ -206,7 +206,7 @@ class DashboardServiceGetRecoveryTest {
         assertThat(recovery.status()).isEqualTo("IN_PROGRESS");
         assertThat(recovery.duration()).isNull();
         assertThat(recovery.buildRunDuration()).isNull();
-        assertThat(recovery.recoveredAt()).isEqualTo(inProgressDeployment.getUpdatedAt());
+        assertThat(recovery.recoveredAt()).isNull(); // status가 COMPLETED가 아니면 null
         assertThat(recovery.updatedAt()).isEqualTo(inProgressDeployment.getUpdatedAt());
     }
 
@@ -231,7 +231,7 @@ class DashboardServiceGetRecoveryTest {
         assertThat(recovery.status()).isEqualTo("PENDING");
         assertThat(recovery.duration()).isNull();
         assertThat(recovery.buildRunDuration()).isNull();
-        assertThat(recovery.recoveredAt()).isEqualTo(pendingDeployment.getUpdatedAt());
+        assertThat(recovery.recoveredAt()).isNull(); // status가 COMPLETED가 아니면 null
         assertThat(recovery.updatedAt()).isEqualTo(pendingDeployment.getUpdatedAt());
     }
 
@@ -329,7 +329,7 @@ class DashboardServiceGetRecoveryTest {
         assertThat(recovery.status()).isEqualTo("COMPLETED");
         assertThat(recovery.duration()).isNull(); // BuildRun이 없으면 duration도 null
         assertThat(recovery.buildRunDuration()).isNull(); // BuildRun이 없으면 buildRunDuration도 null
-        assertThat(recovery.recoveredAt()).isEqualTo(completedDeployment.getUpdatedAt());
+        assertThat(recovery.recoveredAt()).isNull(); // BuildRun이 없으면 recoveredAt도 null
         assertThat(recovery.updatedAt()).isEqualTo(completedDeployment.getUpdatedAt());
     }
 }
