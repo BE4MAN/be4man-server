@@ -9,7 +9,7 @@ import sys.be4man.domains.approval.model.entity.Approval;
 import sys.be4man.domains.approval.model.type.ApprovalStatus;
 import sys.be4man.domains.approval.model.type.ApprovalType;
 
-public interface ApprovalRepository extends JpaRepository<Approval, Long> {
+public interface ApprovalRepository extends JpaRepository<Approval, Long>, ApprovalRepositoryCustom {
 
     List<Approval> findByAccountId(Long accountId);
     List<Approval> findByAccountIdAndStatus(Long accountId, ApprovalStatus status);
@@ -50,4 +50,9 @@ public interface ApprovalRepository extends JpaRepository<Approval, Long> {
     Optional<Approval> findByIdWithLines(@Param("id") Long id);
 
     List<Approval> findByDeploymentIdAndTypeAndIsDeletedFalse(Long id, ApprovalType approvalType);
+
+    /**
+     * Deployment ID로 Approval 조회
+     */
+    List<Approval> findByDeploymentId(Long deploymentId);
 }
