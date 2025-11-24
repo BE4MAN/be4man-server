@@ -56,11 +56,18 @@ public class TaskDetailTimelineService {
         String planApprovalDescription = null;
         String planApprovalResult = null;
 
-        boolean isRejectedByApprovalLine = false;
-        LocalDateTime rejectedAt = null;
-
-        if (!planApprovals.isEmpty()) {
+        // ✅ 취소된 작업은 먼저 확인
+        if (deployment.getStatus() == DeploymentStatus.CANCELED) {
+            planApprovalStatus = "completed";
+            planApprovalResult = "failure";
+            planApprovalCompletedAt = deployment.getUpdatedAt();
+            planApprovalDescription = "취소";
+            log.debug("타임라인 - 작업 취소: deploymentId={}", deployment.getId());
+        } else if (!planApprovals.isEmpty()) {
             Approval approval = planApprovals.get(0);
+
+            boolean isRejectedByApprovalLine = false;
+            LocalDateTime rejectedAt = null;
 
             for (ApprovalLine line : approval.getApprovalLines()) {
                 if (line.getType() != ApprovalLineType.CC) {

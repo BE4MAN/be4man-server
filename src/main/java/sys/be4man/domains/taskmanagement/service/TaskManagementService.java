@@ -368,10 +368,11 @@ public class TaskManagementService {
                     }
                 }
 
+                // ✅ 프로세스 내 각 단계별 Deployment 찾기
                 planDeployment = relatedDeployments.stream()
                         .filter(d -> d.getStage() == DeploymentStage.PLAN)
                         .findFirst()
-                        .orElse(deployment);
+                        .orElse(null);  // ✅ PLAN이 없으면 null (orElse(deployment) 제거)
 
                 deploymentTask = relatedDeployments.stream()
                         .filter(d -> d.getStage() == DeploymentStage.DEPLOYMENT)
@@ -382,6 +383,16 @@ public class TaskManagementService {
                         .filter(d -> d.getStage() == DeploymentStage.REPORT)
                         .findFirst()
                         .orElse(null);
+
+                // ✅ PLAN을 못 찾은 경우 로그 출력
+                if (planDeployment == null) {
+                    log.warn("⚠️ 프로세스 내에서 PLAN을 찾지 못함 - deploymentId: {}, relatedDeployments: {}",
+                            deployment.getId(), relatedDeployments.size());
+                    for (Deployment d : relatedDeployments) {
+                        log.warn("  - Deployment: id={}, stage={}, status={}, createdAt={}",
+                                d.getId(), d.getStage(), d.getStatus(), d.getCreatedAt());
+                    }
+                }
             }
 
         } else {
@@ -420,10 +431,57 @@ public class TaskManagementService {
             log.debug("PLAN 계획서 조회 - planDeploymentId: {}, approvals: {}",
                     planDeployment.getId(), planApprovals.size());
         } else {
-            // planDeployment가 null인 경우 (예외 상황)
-            planApprovals = List.of();
-            log.warn("⚠️ planDeployment가 null - deploymentId: {}, stage: {}",
-                    deployment.getId(), deployment.getStage());
+            // ✅ planDeployment가 null인 경우 - 다양한 방법으로 Approval 찾기 시도
+            log.warn("⚠️ planDeployment가 null - deploymentId: {}, stage: {}, PR: {}, Project: {}",
+                    deployment.getId(), deployment.getStage(),
+                    pullRequestId, deployment.getProject() != null ? deployment.getProject().getId() : null);
+
+            // 1. 현재 deployment로 직접 조회 시도
+            planApprovals = approvalRepository.findByDeploymentIdAndTypeAndIsDeletedFalse(
+                    deployment.getId(), ApprovalType.PLAN);
+            log.warn("⚠️ [시도1] 현재 deployment로 조회한 planApprovals: {}", planApprovals.size());
+
+            // 2. 같은 PR의 모든 PLAN Approval 조회 (가장 최근 것 사용)
+            if (planApprovals.isEmpty() && pullRequestId != null) {
+                log.warn("⚠️ [시도2] 같은 PR의 모든 Approval 조회 시도 - prId: {}", pullRequestId);
+
+                List<Approval> allApprovals = approvalRepository.findAll().stream()
+                        .filter(a -> !a.getIsDeleted())
+                        .filter(a -> a.getType() == ApprovalType.PLAN)
+                        .filter(a -> a.getDeployment() != null)
+                        .filter(a -> a.getDeployment().getPullRequest() != null)
+                        .filter(a -> a.getDeployment().getPullRequest().getId().equals(pullRequestId))
+                        .filter(a -> a.getDeployment().getProject() != null)
+                        .filter(a -> a.getDeployment().getProject().getId().equals(deployment.getProject().getId()))
+                        // 현재 deployment보다 이전에 생성된 Approval만
+                        .filter(a -> a.getCreatedAt().isBefore(deployment.getCreatedAt()) ||
+                                    (a.getCreatedAt().equals(deployment.getCreatedAt()) && a.getId() < deployment.getId()))
+                        .sorted((a1, a2) -> {
+                            // 최신 순 정렬
+                            int timeCompare = a2.getCreatedAt().compareTo(a1.getCreatedAt());
+                            if (timeCompare != 0) return timeCompare;
+                            return a2.getId().compareTo(a1.getId());
+                        })
+                        .limit(1)
+                        .collect(Collectors.toList());
+
+                if (!allApprovals.isEmpty()) {
+                    planApprovals = allApprovals;
+                    planDeployment = allApprovals.get(0).getDeployment();
+                    log.warn("⚠️ [시도2 성공] PR 기반 Approval 발견 - approvalId: {}, deploymentId: {}, approvalCreatedAt: {}",
+                            allApprovals.get(0).getId(),
+                            planDeployment.getId(),
+                            allApprovals.get(0).getCreatedAt());
+                } else {
+                    log.warn("⚠️ [시도2 실패] PR 기반 Approval을 찾을 수 없음");
+                }
+            }
+
+            // 3. 여전히 못 찾았으면 현재 deployment를 planDeployment로 사용
+            if (!planApprovals.isEmpty() && planDeployment == null) {
+                planDeployment = deployment;
+                log.warn("⚠️ planDeployment를 현재 deployment로 설정 - deploymentId: {}", deployment.getId());
+            }
         }
 
         List<Approval> reportApprovals = reportDeployment != null ?
@@ -533,6 +591,12 @@ public class TaskManagementService {
                 currentStatus = timelineDeployment.getStatus().getKoreanName();
                 initialTab = "plan";
             }
+        } else if (timelineDeployment.getStatus() == DeploymentStatus.CANCELED) {
+            // ✅ 취소된 작업은 무조건 "취소" 상태 표시
+            currentStage = timelineDeployment.getStage().getKoreanName();
+            currentStatus = "취소";
+            initialTab = "plan";
+            log.debug("CANCELED 상태 - currentStage: {}, currentStatus: 취소", currentStage);
         } else if (timelineDeployment.getStage() == DeploymentStage.PLAN) {
             // ✅ PLAN 단계는 planContent.planStatus 사용 (ApprovalLine 기반 실제 승인 상태)
             currentStage = "계획서";
