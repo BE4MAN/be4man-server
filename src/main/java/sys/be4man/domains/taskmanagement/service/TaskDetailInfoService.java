@@ -23,6 +23,29 @@ public class TaskDetailInfoService {
     private static final DateTimeFormatter DATETIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy.MM.dd HH:mm");
 
     public PlanContentDto buildPlanContent(Deployment deployment, List<Approval> planApprovals, BuildRun buildRun) {
+        // ✅ deployment가 null인 경우 처리 (PLAN이 없는 경우)
+        if (deployment == null) {
+            log.warn("⚠️ deployment가 null입니다. planApprovals로만 계획서 생성 시도");
+
+            // Approval이 없으면 null 반환
+            if (planApprovals.isEmpty()) {
+                log.warn("⚠️ planApprovals도 없습니다. null 반환");
+                return null;
+            }
+
+            // Approval 정보로만 계획서 생성
+            Approval planApproval = planApprovals.get(0);
+            Deployment approvalDeployment = planApproval.getDeployment();
+
+            if (approvalDeployment == null) {
+                log.warn("⚠️ Approval의 deployment도 null입니다. 기본값으로 생성");
+                return buildPlanContentFromApprovalOnly(planApproval, buildRun);
+            }
+
+            // Approval의 deployment를 사용
+            deployment = approvalDeployment;
+        }
+
         log.debug("계획서 내용 생성 - deploymentId: {}, planApprovals: {}", deployment.getId(), planApprovals.size());
 
         String content = deployment.getContent();
@@ -33,12 +56,23 @@ public class TaskDetailInfoService {
             Approval planApproval = planApprovals.get(0);
             content = planApproval.getContent();
 
-            log.debug("Approval 정보 - id: {}, lines: {}", planApproval.getId(), planApproval.getApprovalLines().size());
+            // ✅ 기안자 ID 가져오기
+            Long drafterAccountId = planApproval.getAccount() != null ? planApproval.getAccount().getId() : null;
+
+            log.debug("Approval 정보 - id: {}, lines: {}, 기안자 account_id: {}",
+                    planApproval.getId(), planApproval.getApprovalLines().size(), drafterAccountId);
 
             // 반려 확인
             boolean isRejected = false;
             for (ApprovalLine line : planApproval.getApprovalLines()) {
                 if (line.getType() != ApprovalLineType.CC) {
+                    // ✅ 기안자 제외
+                    Long lineAccountId = line.getAccount() != null ? line.getAccount().getId() : null;
+                    if (lineAccountId != null && lineAccountId.equals(drafterAccountId)) {
+                        log.debug("  ApprovalLine - 기안자 제외: {}", line.getAccount().getName());
+                        continue;
+                    }
+
                     Boolean isApproved = line.getIsApproved();
                     log.debug("  ApprovalLine - account: {}, isApproved: {}",
                             line.getAccount().getName(), isApproved);
@@ -50,15 +84,38 @@ public class TaskDetailInfoService {
                 }
             }
 
-            // 전체 승인 완료 확인
-            boolean allApproved = planApproval.getApprovalLines().stream()
+            // 전체 승인 완료 확인 (기안자 제외한 실제 승인자만 확인)
+            List<ApprovalLine> actualApprovers = planApproval.getApprovalLines().stream()
                     .filter(line -> line.getType() != ApprovalLineType.CC)
+                    .filter(line -> {
+                        // ✅ 기안자 제외
+                        Long lineAccountId = line.getAccount() != null ? line.getAccount().getId() : null;
+                        return !(lineAccountId != null && lineAccountId.equals(drafterAccountId));
+                    })
+                    .toList();
+
+            log.debug("실제 승인자 수 (기안자 제외): {}", actualApprovers.size());
+
+            // 각 승인자의 승인 상태 상세 로그
+            for (ApprovalLine approver : actualApprovers) {
+                log.debug("  실제 승인자 - name: {}, isApproved: {}",
+                        approver.getAccount() != null ? approver.getAccount().getName() : "null",
+                        approver.getIsApproved());
+            }
+
+            // 실제 승인자가 있고, 모두 승인했는지 확인
+            boolean allApproved = !actualApprovers.isEmpty() && actualApprovers.stream()
                     .allMatch(line -> {
                         Boolean isApproved = line.getIsApproved();
-                        return isApproved != null && isApproved;
+                        boolean approved = isApproved != null && isApproved;
+                        log.debug("    승인 확인 - account: {}, isApproved: {}, result: {}",
+                                line.getAccount() != null ? line.getAccount().getName() : "null",
+                                isApproved, approved);
+                        return approved;
                     });
 
-            log.debug("isRejected: {}, allApproved: {}", isRejected, allApproved);
+            log.debug("isRejected: {}, allApproved: {}, actualApprovers.isEmpty: {}",
+                    isRejected, allApproved, actualApprovers.isEmpty());
 
             if (isRejected) {
                 planStatus = "반려";
@@ -112,6 +169,71 @@ public class TaskDetailInfoService {
                 .scheduledToEndedAt(formatDateTime(actualEndedAt))
                 .expectedDuration(deployment.getExpectedDuration())
                 .version(deployment.getVersion())
+                .content(content)
+                .planStatus(planStatus)
+                .build();
+    }
+
+    /**
+     * Approval 정보만으로 계획서 생성 (deployment가 없는 경우)
+     */
+    private PlanContentDto buildPlanContentFromApprovalOnly(Approval planApproval, BuildRun buildRun) {
+        log.debug("Approval만으로 계획서 생성 - approvalId: {}", planApproval.getId());
+
+        String content = planApproval.getContent();
+        String planStatus = "승인대기";
+
+        // ✅ 기안자 ID 가져오기
+        Long drafterAccountId = planApproval.getAccount() != null ? planApproval.getAccount().getId() : null;
+
+        // 승인 상태 확인
+        boolean isRejected = false;
+        for (ApprovalLine line : planApproval.getApprovalLines()) {
+            if (line.getType() != ApprovalLineType.CC) {
+                // ✅ 기안자 제외
+                Long lineAccountId = line.getAccount() != null ? line.getAccount().getId() : null;
+                if (lineAccountId != null && lineAccountId.equals(drafterAccountId)) {
+                    continue;
+                }
+
+                Boolean isApproved = line.getIsApproved();
+                if (isApproved != null && !isApproved) {
+                    isRejected = true;
+                    break;
+                }
+            }
+        }
+
+        // 전체 승인 완료 확인 (기안자 제외한 실제 승인자만 확인)
+        List<ApprovalLine> actualApprovers = planApproval.getApprovalLines().stream()
+                .filter(line -> line.getType() != ApprovalLineType.CC)
+                .filter(line -> {
+                    // ✅ 기안자 제외
+                    Long lineAccountId = line.getAccount() != null ? line.getAccount().getId() : null;
+                    return !(lineAccountId != null && lineAccountId.equals(drafterAccountId));
+                })
+                .toList();
+
+        // 실제 승인자가 있고, 모두 승인했는지 확인
+        boolean allApproved = !actualApprovers.isEmpty() && actualApprovers.stream()
+                .allMatch(line -> {
+                    Boolean isApproved = line.getIsApproved();
+                    return isApproved != null && isApproved;
+                });
+
+        if (isRejected) {
+            planStatus = "반려";
+        } else if (allApproved) {
+            planStatus = "승인완료";
+        }
+
+        return PlanContentDto.builder()
+                .drafter(planApproval.getAccount() != null ? planApproval.getAccount().getName() : null)
+                .department(planApproval.getAccount() != null && planApproval.getAccount().getDepartment() != null ?
+                        planApproval.getAccount().getDepartment().getKoreanName() : null)
+                .createdAt(formatDateTime(planApproval.getCreatedAt()))
+                .serviceName(planApproval.getService())
+                .taskTitle(planApproval.getTitle())
                 .content(content)
                 .planStatus(planStatus)
                 .build();

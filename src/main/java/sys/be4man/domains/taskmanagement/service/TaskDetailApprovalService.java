@@ -39,13 +39,27 @@ public class TaskDetailApprovalService {
         Approval approval = approvals.get(0);
         List<ApproverDto> approvers = new ArrayList<>();
 
+        // ✅ 기안자 ID 가져오기
+        Long drafterAccountId = approval.getAccount() != null ? approval.getAccount().getId() : null;
+        log.debug("기안자 account_id: {}", drafterAccountId);
+
         // ✅ ApprovalLine을 id 기준으로 정렬 (생성 순서)
         List<ApprovalLine> sortedLines = approval.getApprovalLines().stream()
                 .filter(line -> line.getType() != ApprovalLineType.CC)  // 참조자 제외
+                .filter(line -> {
+                    // ✅ 기안자 제외 (approval_line의 account_id와 approval의 drafter account_id가 같으면 제외)
+                    Long lineAccountId = line.getAccount() != null ? line.getAccount().getId() : null;
+                    boolean isDrafter = lineAccountId != null && lineAccountId.equals(drafterAccountId);
+                    if (isDrafter) {
+                        log.debug("기안자를 승인자 목록에서 제외 - account_id: {}, name: {}",
+                                lineAccountId, line.getAccount().getName());
+                    }
+                    return !isDrafter;
+                })
                 .sorted(Comparator.comparing(ApprovalLine::getId))      // ✅ id 기준 정렬
                 .toList();
 
-        log.debug("정렬된 ApprovalLine 개수: {}", sortedLines.size());
+        log.debug("정렬된 ApprovalLine 개수 (기안자 제외): {}", sortedLines.size());
 
         // ✅ 현재 차례 승인자의 account_id 찾기
         Long currentApproverAccountId = null;

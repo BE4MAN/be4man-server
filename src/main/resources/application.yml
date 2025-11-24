@@ -93,6 +93,8 @@ logging:
     org.springframework.security: DEBUG
     org.hibernate.SQL: DEBUG
     org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+    sys.be4man.domains.taskmanagement.service: DEBUG
+
 
 
 # Swagger

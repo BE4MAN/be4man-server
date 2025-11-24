@@ -41,14 +41,15 @@ public class TaskManagementRepositoryImpl implements TaskManagementRepositoryCus
         // 1. 삭제되지 않은 데이터만 조회
         builder.and(deployment.isDeleted.isFalse());
 
-        // ✅ 2. 배포 대기 상태 제외 (stage=DEPLOYMENT이지만 아직 시작 안함)
+        // ✅ 2. DEPLOYMENT의 PENDING/APPROVED 상태만 제외 (계획서 단계에서 이미 표시됨)
+        // RETRY/ROLLBACK은 PENDING부터 표시 (자체가 계획서를 포함)
         builder.and(
                 deployment.stage.eq(DeploymentStage.DEPLOYMENT)
-                        .and(deployment.status.in(
-                                DeploymentStatus.PENDING,
-                                DeploymentStatus.APPROVED
-                        ))
-                        .not()
+                .and(deployment.status.in(
+                        DeploymentStatus.PENDING,
+                        DeploymentStatus.APPROVED
+                ))
+                .not()
         );
 
         // 3. 검색어 조건
@@ -225,5 +226,42 @@ public class TaskManagementRepositoryImpl implements TaskManagementRepositoryCus
         }
         // 기본값: 최신순
         return deployment.createdAt.desc();
+    }
+
+    @Override
+    public List<Deployment> findProcessDeploymentsQueryDsl(
+            Long projectId,
+            Long prId,
+            LocalDateTime startTime,
+            Long startId,
+            LocalDateTime endTime,
+            Long endId
+    ) {
+        BooleanBuilder builder = new BooleanBuilder();
+
+        builder.and(deployment.project.id.eq(projectId))
+                .and(deployment.pullRequest.id.eq(prId))
+                .and(deployment.createdAt.gt(startTime)
+                        .or(deployment.createdAt.eq(startTime).and(deployment.id.goe(startId))))
+                .and(deployment.isDeleted.isFalse());
+
+        // endTime과 endId가 null이 아닐 때만 조건 추가
+        if (endTime != null && endId != null) {
+            builder.and(deployment.createdAt.lt(endTime)
+                    .or(deployment.createdAt.eq(endTime).and(deployment.id.lt(endId))));
+        }
+
+        // 일반 프로세스에서는 RETRY/ROLLBACK 제외 (독립 프로세스이므로)
+        builder.and(deployment.stage.ne(DeploymentStage.RETRY))
+                .and(deployment.stage.ne(DeploymentStage.ROLLBACK));
+
+        return queryFactory
+                .selectFrom(deployment)
+                .leftJoin(deployment.project, project).fetchJoin()
+                .leftJoin(deployment.issuer, account).fetchJoin()
+                .leftJoin(deployment.pullRequest, pullRequest).fetchJoin()
+                .where(builder)
+                .orderBy(deployment.createdAt.asc(), deployment.id.asc())
+                .fetch();
     }
 }
