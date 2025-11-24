@@ -518,12 +518,28 @@ public class TaskManagementService {
                 currentStatus = "반려";
                 initialTab = "plan";
             } else if (timelineDeployment.getStatus() == DeploymentStatus.PENDING) {
-                currentStatus = "대기";
+                // ✅ RETRY/ROLLBACK도 계획서 승인 과정이 있으므로 planContent 확인
+                if ((timelineDeployment.getStage() == DeploymentStage.RETRY ||
+                     timelineDeployment.getStage() == DeploymentStage.ROLLBACK) &&
+                    planContent != null) {
+                    currentStatus = planContent.getPlanStatus();
+                    log.debug("RETRY/ROLLBACK PENDING - planContent.planStatus: {}, currentStatus: {}",
+                            planContent.getPlanStatus(), currentStatus);
+                } else {
+                    currentStatus = "대기";
+                }
                 initialTab = "plan";
             } else {
                 currentStatus = timelineDeployment.getStatus().getKoreanName();
                 initialTab = "plan";
             }
+        } else if (timelineDeployment.getStage() == DeploymentStage.PLAN) {
+            // ✅ PLAN 단계는 planContent.planStatus 사용 (ApprovalLine 기반 실제 승인 상태)
+            currentStage = "계획서";
+            currentStatus = planContent != null ? planContent.getPlanStatus() : "승인대기";
+            initialTab = "plan";
+            log.debug("PLAN 단계 - planContent.planStatus: {}, currentStatus: {}",
+                    planContent != null ? planContent.getPlanStatus() : "null", currentStatus);
         } else if (timelineDeployment.getStatus() == DeploymentStatus.APPROVED) {
             currentStage = "계획서";
             currentStatus = "승인완료";
@@ -534,8 +550,11 @@ public class TaskManagementService {
             initialTab = "plan";
         } else if (timelineDeployment.getStatus() == DeploymentStatus.PENDING) {
             currentStage = "계획서";
-            currentStatus = "승인대기";
+            // ✅ PENDING이지만 planContent가 있으면 실제 승인 상태 확인
+            currentStatus = planContent != null ? planContent.getPlanStatus() : "승인대기";
             initialTab = "plan";
+            log.debug("PENDING 상태 - planContent.planStatus: {}, currentStatus: {}",
+                    planContent != null ? planContent.getPlanStatus() : "null", currentStatus);
         } else {
             currentStage = timelineDeployment.getStage().getKoreanName();
             currentStatus = timelineDeployment.getStatus().getKoreanName();

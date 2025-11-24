@@ -35,7 +35,7 @@ import sys.be4man.global.exception.NotFoundException;
 
 @RequiredArgsConstructor
 @Service
-public class JenkinsLogServiceImpl implements LogService {
+public class   JenkinsLogServiceImpl implements LogService {
 
     private static final java.time.ZoneId ZONE_SEOUL = java.time.ZoneId.of("Asia/Seoul");
 

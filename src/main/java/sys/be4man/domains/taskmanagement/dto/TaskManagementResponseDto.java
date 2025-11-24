@@ -65,11 +65,20 @@ public class TaskManagementResponseDto {
         if (stage == DeploymentStage.REPORT && reportApprovals != null && !reportApprovals.isEmpty()) {
             Approval reportApproval = reportApprovals.get(0);
 
-            // 반려 확인
+            // ✅ 기안자 ID 가져오기
+            Long drafterAccountId = reportApproval.getAccount() != null ? reportApproval.getAccount().getId() : null;
+
+            // 반려 확인 (기안자 제외)
             boolean isRejected = false;
             LocalDateTime rejectedAt = null;
             for (ApprovalLine line : reportApproval.getApprovalLines()) {
                 if (line.getType() != ApprovalLineType.CC) {
+                    // ✅ 기안자 제외
+                    Long lineAccountId = line.getAccount() != null ? line.getAccount().getId() : null;
+                    if (lineAccountId != null && lineAccountId.equals(drafterAccountId)) {
+                        continue;
+                    }
+
                     Boolean isApproved = line.getIsApproved();
                     if (isApproved != null && !isApproved) {
                         isRejected = true;
@@ -85,9 +94,18 @@ public class TaskManagementResponseDto {
                 return;
             }
 
-            // 전체 승인 완료 확인
-            boolean allApproved = reportApproval.getApprovalLines().stream()
+            // 전체 승인 완료 확인 (기안자 제외한 실제 승인자만 확인)
+            List<ApprovalLine> actualApprovers = reportApproval.getApprovalLines().stream()
                     .filter(line -> line.getType() != ApprovalLineType.CC)
+                    .filter(line -> {
+                        // ✅ 기안자 제외
+                        Long lineAccountId = line.getAccount() != null ? line.getAccount().getId() : null;
+                        return !(lineAccountId != null && lineAccountId.equals(drafterAccountId));
+                    })
+                    .collect(java.util.stream.Collectors.toList());
+
+            // 실제 승인자가 있고, 모두 승인했는지 확인
+            boolean allApproved = !actualApprovers.isEmpty() && actualApprovers.stream()
                     .allMatch(line -> {
                         Boolean isApproved = line.getIsApproved();
                         return isApproved != null && isApproved;
@@ -110,11 +128,20 @@ public class TaskManagementResponseDto {
         if (planApprovals != null && !planApprovals.isEmpty()) {
             Approval approval = planApprovals.get(0);
 
-            // 반려 확인
+            // ✅ 기안자 ID 가져오기
+            Long drafterAccountId = approval.getAccount() != null ? approval.getAccount().getId() : null;
+
+            // 반려 확인 (기안자 제외)
             boolean isRejectedByApprovalLine = false;
             LocalDateTime rejectedAt = null;
             for (ApprovalLine line : approval.getApprovalLines()) {
                 if (line.getType() != ApprovalLineType.CC) {
+                    // ✅ 기안자 제외
+                    Long lineAccountId = line.getAccount() != null ? line.getAccount().getId() : null;
+                    if (lineAccountId != null && lineAccountId.equals(drafterAccountId)) {
+                        continue;
+                    }
+
                     Boolean isApproved = line.getIsApproved();
                     if (isApproved != null && !isApproved) {
                         isRejectedByApprovalLine = true;
@@ -130,15 +157,24 @@ public class TaskManagementResponseDto {
                 return;
             }
 
-            // 전체 승인 완료 확인
-            boolean allApproved = approval.getApprovalLines().stream()
+            // 전체 승인 완료 확인 (기안자 제외한 실제 승인자만 확인)
+            List<ApprovalLine> actualApprovers = approval.getApprovalLines().stream()
                     .filter(line -> line.getType() != ApprovalLineType.CC)
+                    .filter(line -> {
+                        // ✅ 기안자 제외
+                        Long lineAccountId = line.getAccount() != null ? line.getAccount().getId() : null;
+                        return !(lineAccountId != null && lineAccountId.equals(drafterAccountId));
+                    })
+                    .collect(java.util.stream.Collectors.toList());
+
+            // 실제 승인자가 있고, 모두 승인했는지 확인
+            boolean allApproved = !actualApprovers.isEmpty() && actualApprovers.stream()
                     .allMatch(line -> {
                         Boolean isApproved = line.getIsApproved();
                         return isApproved != null && isApproved;
                     });
 
-            if (allApproved && stage == DeploymentStage.PLAN) {
+            if (allApproved && (stage == DeploymentStage.PLAN || stage == DeploymentStage.RETRY || stage == DeploymentStage.ROLLBACK)) {
                 this.status = "승인";
                 this.completionTime = formatDateTime(approval.getApprovedAt() != null ?
                         approval.getApprovedAt() : deployment.getUpdatedAt());
