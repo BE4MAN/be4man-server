@@ -63,7 +63,7 @@ public class DeploymentServiceImpl implements DeploymentService {
                 .stage(DeploymentStage.valueOf(request.getStage()))
                 .status(DeploymentStatus.valueOf(
                         request.getStatus() != null ? request.getStatus() : "PENDING"))
-                .isDeployed(false)
+                .isDeployed(null)
                 .expectedDuration(String.valueOf(s.expectedMinutes))
                 .version(request.getVersion())
                 .content(request.getContent())
