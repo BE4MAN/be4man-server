@@ -1,5 +1,6 @@
 package sys.be4man.domains.approval.dto.request;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -18,6 +19,9 @@ public class ApprovalCreateRequest {
     private String service;
     private Long projectId;
     private Long pullRequestId;
+
+    private LocalDateTime scheduledAt;
+    private LocalDateTime scheduledToEndedAt;
 
     private List<Long> relatedProjectIds;
 

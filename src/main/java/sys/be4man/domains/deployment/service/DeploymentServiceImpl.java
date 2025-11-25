@@ -2,10 +2,7 @@ package sys.be4man.domains.deployment.service;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import lombok.RequiredArgsConstructor;
@@ -39,11 +36,6 @@ public class DeploymentServiceImpl implements DeploymentService {
     private final AccountRepository accountRepository;
     private final PullRequestRepository pullRequestRepository;
 
-    private static final DateTimeFormatter YMDHM = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
-    private static final Pattern RANGE = Pattern.compile(
-            "(20\\d{2}-\\d{2}-\\d{2})\\s+(\\d{2}:\\d{2})\\s*[~\\-–—]\\s*(20\\d{2}-\\d{2}-\\d{2})\\s+(\\d{2}:\\d{2})"
-    );
-
     @Override
     public DeploymentResponse createDeployment(DeploymentCreateRequest request) {
         Project project = projectRepository.findById(request.getProjectId())
@@ -53,7 +45,7 @@ public class DeploymentServiceImpl implements DeploymentService {
         PullRequest pr = pullRequestRepository.findById(request.getPullRequestId())
                 .orElseThrow(() -> new IllegalArgumentException("PR 정보를 찾을 수 없습니다."));
 
-        Schedule s = parseSchedule(request.getContent());
+        Schedule s = buildScheduleFromRequest(request);
 
         Deployment deployment = Deployment.builder()
                 .project(project)
@@ -88,8 +80,12 @@ public class DeploymentServiceImpl implements DeploymentService {
         return project.getJenkinsIp() + "/job/deploy/build?token=DEPLOY_TOKEN";
     }
 
+    /**
+     * ✅ 이제는 본문에서 파싱하지 않고, Request 에 담긴 값만 사용
+     *  - scheduledAt / scheduledToEndedAt 이 둘 다 있으면 expectedMinutes 계산
+     *  - 둘 중 하나만 있으면 expectedMinutes = 0
+     */
     private static class Schedule {
-
         final LocalDateTime start;
         final LocalDateTime end;
         final long expectedMinutes;
@@ -97,52 +93,23 @@ public class DeploymentServiceImpl implements DeploymentService {
         Schedule(LocalDateTime s, LocalDateTime e) {
             this.start = s;
             this.end = e;
-            this.expectedMinutes = (s != null && e != null && !e.isBefore(s))
-                    ? Duration.between(s, e).toMinutes()
-                    : 0L;
+            this.expectedMinutes =
+                    (s != null && e != null && !e.isBefore(s))
+                            ? Duration.between(s, e).toMinutes()
+                            : 0L;
         }
     }
 
-    private Schedule parseSchedule(String content) {
-        if (content == null || content.isBlank()) {
-            return new Schedule(null, null);
+    private Schedule buildScheduleFromRequest(DeploymentCreateRequest request) {
+        LocalDateTime start = request.getScheduledAt();
+        LocalDateTime end = request.getScheduledToEndedAt();
+
+        if (start != null && end != null && end.isBefore(start)) {
+            log.warn("Invalid schedule in DeploymentCreateRequest: end < start. start={}, end={}", start, end);
+            return new Schedule(start, null);
         }
 
-        String text = content
-                .replaceAll("(?is)<style[^>]*>.*?</style>", " ")
-                .replaceAll("(?is)<script[^>]*>.*?</script>", " ")
-                .replaceAll("(?is)<[^>]+>", " ")
-                .replace("&nbsp;", " ")
-                .replace("&ensp;", " ")
-                .replace("&emsp;", " ")
-                .replace("&ndash;", "-")
-                .replace("&minus;", "-")
-                .replace("&mdash;", "-")
-                .trim()
-                .replaceAll("\\s+", " ");
-
-        Matcher rm = RANGE.matcher(text);
-        if (rm.find()) {
-            try {
-                LocalDateTime s = LocalDateTime.parse(rm.group(1) + " " + rm.group(2), YMDHM);
-                LocalDateTime e = LocalDateTime.parse(rm.group(3) + " " + rm.group(4), YMDHM);
-                if (!e.isBefore(s)) {
-                    return new Schedule(s, e);
-                }
-            } catch (Exception ignore) {
-            }
-        }
-
-        try {
-            Matcher sm = Pattern.compile("(20\\d{2}-\\d{2}-\\d{2}\\s\\d{2}:\\d{2})").matcher(text);
-            if (sm.find()) {
-                LocalDateTime s = LocalDateTime.parse(sm.group(1), YMDHM);
-                return new Schedule(s, null);
-            }
-        } catch (Exception ignore) {
-        }
-
-        return new Schedule(null, null);
+        return new Schedule(start, end);
     }
 
     @Override
@@ -183,10 +150,10 @@ public class DeploymentServiceImpl implements DeploymentService {
     @Override
     public DeploymentStageAndStatusResponseDto getBuildStageAndStatus(Long deploymentId) {
         Deployment deployment = deploymentRepository.findByIdAndIsDeletedFalse(deploymentId)
-                .orElseThrow(
-                        NotFoundException::new);
+                .orElseThrow(NotFoundException::new);
 
-        return DeploymentStageAndStatusResponseDto.builder().stage(deployment.getStage())
+        return DeploymentStageAndStatusResponseDto.builder()
+                .stage(deployment.getStage())
                 .status(deployment.getStatus())
                 .deploymentId(deployment.getId())
                 .build();
