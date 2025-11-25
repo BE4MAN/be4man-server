@@ -1,5 +1,6 @@
 package sys.be4man.domains.approval.dto.request;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -14,6 +15,9 @@ public class ApprovalUpdateRequest {
     private String content;
     private String service;
     private ApprovalType type;
+
+    private LocalDateTime scheduledAt;
+    private LocalDateTime scheduledToEndedAt;
 
     private List<ApprovalLineRequest> lines;
 

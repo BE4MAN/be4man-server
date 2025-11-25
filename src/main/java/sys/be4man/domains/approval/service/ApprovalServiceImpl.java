@@ -1,19 +1,15 @@
 package sys.be4man.domains.approval.service;
 
-import java.time.Duration;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
-import java.time.format.ResolverStyle;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Optional;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
 import sys.be4man.domains.account.model.entity.Account;
 import sys.be4man.domains.account.repository.AccountRepository;
 import sys.be4man.domains.approval.dto.request.ApprovalCreateRequest;
@@ -78,21 +74,19 @@ public class ApprovalServiceImpl implements ApprovalService {
         approvalRepository.save(approval);
         createLines(request, approval);
         approval.updateNextApprover(resolveInitialNextApprover(approval));
-        if (approval.getDeployment() != null) {
-            parseScheduleFromContent(approval.getContent()).ifPresent(s -> approval.getDeployment().updateSchedule(s.start, s.end));
-        }
         return approval.getId();
     }
 
     @Override
     public void submit(Long approvalId) {
         Approval approval = getApprovalOrThrow(approvalId);
-        if (approval.getDeployment() != null) {
-            parseScheduleFromContent(approval.getContent()).ifPresent(s -> approval.getDeployment().updateSchedule(s.start, s.end));
-        }
+
         if (ApprovalStatus.DRAFT.equals(approval.getStatus())) {
             Account drafter = approval.getAccount();
-            LocalDateTime when = (approval.getCreatedAt() != null) ? approval.getCreatedAt() : LocalDateTime.now();
+            LocalDateTime when = (approval.getCreatedAt() != null)
+                    ? approval.getCreatedAt()
+                    : LocalDateTime.now();
+
             ApprovalLine drafterLine = approval.getApprovalLines().stream()
                     .filter(line -> line.getAccount().getId().equals(drafter.getId()))
                     .findFirst()
@@ -108,6 +102,7 @@ public class ApprovalServiceImpl implements ApprovalService {
                         approval.addApprovalLine(created);
                         return created;
                     });
+
             drafterLine.updateApproved(true);
             drafterLine.updateApprovedAt(when);
             approval.updateNextApprover(resolveInitialNextApprover(approval));
@@ -115,6 +110,7 @@ public class ApprovalServiceImpl implements ApprovalService {
             syncReportToLatestCompletedByPullRequest(approval);
             return;
         }
+
         if (approval.getNextApprover() == null) {
             approval.updateNextApprover(resolveInitialNextApprover(approval));
         }
@@ -127,8 +123,10 @@ public class ApprovalServiceImpl implements ApprovalService {
         Approval approval = createApprovalEntity(request, ApprovalStatus.PENDING, false);
         approvalRepository.save(approval);
         createLines(request, approval);
+
         Account drafter = approval.getAccount();
         LocalDateTime createdAt = approval.getCreatedAt();
+
         approval.getApprovalLines().stream()
                 .filter(line -> line.getAccount().getId().equals(drafter.getId()))
                 .findFirst()
@@ -136,10 +134,9 @@ public class ApprovalServiceImpl implements ApprovalService {
                     line.updateApproved(true);
                     line.updateApprovedAt(createdAt);
                 });
+
         approval.updateNextApprover(resolveInitialNextApprover(approval));
-        if (approval.getDeployment() != null) {
-            parseScheduleFromContent(approval.getContent()).ifPresent(s -> approval.getDeployment().updateSchedule(s.start, s.end));
-        }
+
         syncReportToLatestCompletedByPullRequest(approval);
         return approval.getId();
     }
@@ -151,6 +148,7 @@ public class ApprovalServiceImpl implements ApprovalService {
         line.approve();
         approvalLineRepository.save(line);
         approval.updateApprovedAt(line.getApprovedAt());
+
         Account next = findNextApproverAfter(approval, line.getAccount());
 
         if (next != null) {
@@ -165,12 +163,11 @@ public class ApprovalServiceImpl implements ApprovalService {
                 String typeName = (approval.getType() != null)
                         ? approval.getType().name()
                         : null;
+
                 if (typeName != null && !"PLAN".equals(typeName)) {
                     d.updateStatus(DeploymentStatus.APPROVED);
                 }
 
-                parseScheduleFromContent(approval.getContent())
-                        .ifPresent(s -> d.updateSchedule(s.start, s.end));
                 LocalDateTime when = d.getScheduledAt();
                 deploymentScheduler.scheduleStageFlipToDeployment(d.getId(), when);
 
@@ -179,17 +176,21 @@ public class ApprovalServiceImpl implements ApprovalService {
                     log.warn("PR_NULL depId={}", d.getId());
                     return;
                 }
+
                 String repoUrl = pr.getRepositoryUrl();
                 String head = pr.getBranch();
                 String[] ow = parseOwnerRepo(repoUrl);
                 String owner = ow[0];
                 String repo = ow[1];
+
                 log.info("FINAL_APPROVE depId={}, when={}, owner={}, repo={}, head={}, repoUrl={}",
                         d.getId(), when, owner, repo, head, repoUrl);
+
                 if (owner == null || repo == null || head == null) {
                     log.warn("MERGE_PARTS_MISSING depId={}", d.getId());
                     return;
                 }
+
                 deploymentScheduler.scheduleMergeIntoMain(
                         d.getId(),
                         owner,
@@ -201,7 +202,6 @@ public class ApprovalServiceImpl implements ApprovalService {
             }
         }
     }
-
 
     @Override
     public void reject(Long approvalId, ApprovalDecisionRequest request) {
@@ -238,7 +238,9 @@ public class ApprovalServiceImpl implements ApprovalService {
     @Override
     public void delete(Long approvalId) {
         Approval approval = getApprovalOrThrow(approvalId);
-        if (approval.getStatus() != ApprovalStatus.DRAFT) throw new IllegalStateException("임시저장 문서만 삭제할 수 있습니다.");
+        if (approval.getStatus() != ApprovalStatus.DRAFT) {
+            throw new IllegalStateException("임시저장 문서만 삭제할 수 있습니다.");
+        }
         approvalLineRepository.deleteByApprovalId(approvalId);
         approvalRepository.delete(approval);
     }
@@ -246,21 +248,33 @@ public class ApprovalServiceImpl implements ApprovalService {
     @Override
     public void update(Long approvalId, ApprovalUpdateRequest request) {
         Approval approval = getApprovalOrThrow(approvalId);
+
         if (approval.getStatus() == ApprovalStatus.APPROVED
                 || approval.getStatus() == ApprovalStatus.REJECTED
                 || approval.getStatus() == ApprovalStatus.CANCELED) {
             throw new IllegalStateException("해당 상태에서는 수정할 수 없습니다. (APPROVED/REJECTED/CANCELED)");
         }
-        if (request.getTitle() != null) approval.updateTitle(request.getTitle());
-        if (request.getContent() != null) approval.updateContent(request.getContent());
-        if (request.getService() != null) approval.updateService(request.getService());
-        if (request.getType() != null) approval.updateType(request.getType());
+
+        if (request.getTitle() != null) {
+            approval.updateTitle(request.getTitle());
+        }
+        if (request.getContent() != null) {
+            approval.updateContent(request.getContent());
+        }
+        if (request.getService() != null) {
+            approval.updateService(request.getService());
+        }
+        if (request.getType() != null) {
+            approval.updateType(request.getType());
+        }
+
         if (request.getRelatedProjectIds() != null) {
             Deployment deployment = approval.getDeployment();
             if (deployment != null) {
                 saveRelatedProjects(deployment, request.getRelatedProjectIds());
             }
         }
+
         boolean linesChanged = (request.getLines() != null) && isLinesChanged(approval, request);
         if (linesChanged) {
             approvalLineRepository.deleteByApprovalId(approvalId);
@@ -269,20 +283,31 @@ public class ApprovalServiceImpl implements ApprovalService {
             approval.updateApprovedAt(null);
             approval.updateNextApprover(resolveInitialNextApprover(approval));
         }
-        if (request.getContent() != null && approval.getDeployment() != null) {
-            parseScheduleFromContent(request.getContent()).ifPresent(s -> {
-                var dep = approval.getDeployment();
-                dep.updateSchedule(s.start, s.end);
-                if (approval.getStatus() == ApprovalStatus.APPROVED) {
-                    deploymentScheduler.cancelStageFlip(dep.getId());
-                    deploymentScheduler.scheduleStageFlipToDeployment(dep.getId(), dep.getScheduledAt());
+
+        if (approval.getDeployment() != null) {
+            var dep = approval.getDeployment();
+
+            LocalDateTime start = request.getScheduledAt();
+            LocalDateTime end   = request.getScheduledToEndedAt();
+
+            if (start != null || end != null) {
+                if (start != null && end != null && end.isBefore(start)) {
+                    log.warn("Invalid schedule in ApprovalUpdateRequest: end < start. start={}, end={}", start, end);
+                } else {
+                    dep.updateSchedule(start, end);
+
+                    if (approval.getStatus() == ApprovalStatus.APPROVED) {
+                        deploymentScheduler.cancelStageFlip(dep.getId());
+                        deploymentScheduler.scheduleStageFlipToDeployment(dep.getId(), dep.getScheduledAt());
+                    }
                 }
-            });
+            }
         }
     }
 
     private Approval getApprovalOrThrow(Long id) {
-        return approvalRepository.findById(id).orElseThrow(() -> new IllegalArgumentException("Approval not found. id=" + id));
+        return approvalRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Approval not found. id=" + id));
     }
 
     private Approval createApprovalEntity(ApprovalCreateRequest request, ApprovalStatus status, boolean isApproved) {
@@ -291,6 +316,7 @@ public class ApprovalServiceImpl implements ApprovalService {
 
         String typeName = (request.getType() != null) ? request.getType().name() : null;
         DeploymentStage stageForDeployment = DeploymentStage.PLAN;
+
         if (typeName != null && !"REPORT".equals(typeName)) {
             try {
                 stageForDeployment = DeploymentStage.valueOf(typeName);
@@ -301,10 +327,14 @@ public class ApprovalServiceImpl implements ApprovalService {
 
         Deployment deployment;
         Long deploymentId = request.getDeploymentId();
+
         if (deploymentId != null && deploymentId > 0) {
             deployment = deploymentRepository.findById(deploymentId)
                     .orElseThrow(() -> new IllegalArgumentException("Deployment not found id=" + deploymentId));
-            if (request.getRelatedProjectIds() != null) saveRelatedProjects(deployment, request.getRelatedProjectIds());
+
+            if (request.getRelatedProjectIds() != null) {
+                saveRelatedProjects(deployment, request.getRelatedProjectIds());
+            }
 
             if (typeName != null && !"REPORT".equals(typeName)) {
                 deployment.updateStage(stageForDeployment);
@@ -321,12 +351,16 @@ public class ApprovalServiceImpl implements ApprovalService {
                     .version(null)
                     .content(request.getContent())
                     .build();
+
             DeploymentResponse created = deploymentService.createDeployment(req);
             deployment = deploymentRepository.getReferenceById(created.getId());
-            if (request.getRelatedProjectIds() != null) saveRelatedProjects(deployment, request.getRelatedProjectIds());
+
+            if (request.getRelatedProjectIds() != null) {
+                saveRelatedProjects(deployment, request.getRelatedProjectIds());
+            }
         }
 
-        parseScheduleFromContent(request.getContent()).ifPresent(s -> deployment.updateSchedule(s.start, s.end));
+        applyScheduleFromRequest(deployment, request);
 
         return Approval.builder()
                 .deployment(deployment)
@@ -342,9 +376,13 @@ public class ApprovalServiceImpl implements ApprovalService {
 
     private void createLines(ApprovalCreateRequest request, Approval approval) {
         if (request.getLines() == null || request.getLines().isEmpty()) return;
+
         for (ApprovalCreateRequest.ApprovalLineRequest lineReq : request.getLines()) {
             if (lineReq.getAccountId() == null) continue;
-            Account account = accountRepository.findById(lineReq.getAccountId()).orElseThrow(() -> new IllegalArgumentException("Account not found."));
+
+            Account account = accountRepository.findById(lineReq.getAccountId())
+                    .orElseThrow(() -> new IllegalArgumentException("Account not found."));
+
             ApprovalLine line = ApprovalLine.builder()
                     .approval(approval)
                     .account(account)
@@ -353,17 +391,22 @@ public class ApprovalServiceImpl implements ApprovalService {
                     .approvedAt(null)
                     .isApproved(null)
                     .build();
+
             approval.addApprovalLine(line);
         }
     }
 
     private ApprovalLine updateOrCreateLineComment(Approval approval, ApprovalDecisionRequest request) {
-        Account approver = accountRepository.findById(request.getApproverAccountId()).orElseThrow(() -> new IllegalArgumentException("Account not found"));
+        Account approver = accountRepository.findById(request.getApproverAccountId())
+                .orElseThrow(() -> new IllegalArgumentException("Account not found"));
+
         return approval.getApprovalLines().stream()
                 .filter(l -> l.getAccount().getId().equals(approver.getId()))
                 .findFirst()
                 .map(line -> {
-                    if (request.getComment() != null) line.updateComment(request.getComment());
+                    if (request.getComment() != null) {
+                        line.updateComment(request.getComment());
+                    }
                     return line;
                 })
                 .orElseGet(() -> {
@@ -380,9 +423,14 @@ public class ApprovalServiceImpl implements ApprovalService {
 
     private Account resolveInitialNextApprover(Approval approval) {
         Long drafterId = approval.getAccount().getId();
+
         return approval.getApprovalLines().stream()
-                .filter(line -> (line.getType() == ApprovalLineType.APPROVE || line.getType() == ApprovalLineType.CONSENT) && !line.getAccount().getId().equals(drafterId))
-                .sorted(Comparator.comparing(ApprovalLine::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder())))
+                .filter(line ->
+                        (line.getType() == ApprovalLineType.APPROVE
+                                || line.getType() == ApprovalLineType.CONSENT)
+                                && !line.getAccount().getId().equals(drafterId))
+                .sorted(Comparator.comparing(ApprovalLine::getCreatedAt,
+                        Comparator.nullsLast(Comparator.naturalOrder())))
                 .map(ApprovalLine::getAccount)
                 .findFirst()
                 .orElse(null);
@@ -390,46 +438,70 @@ public class ApprovalServiceImpl implements ApprovalService {
 
     private Account findNextApproverAfter(Approval approval, Account currentApprover) {
         boolean found = false;
+
         for (ApprovalLine line : approval.getApprovalLines()) {
-            if (line.getType() != ApprovalLineType.APPROVE && line.getType() != ApprovalLineType.CONSENT) continue;
-            if (!found) {
-                if (line.getAccount().getId().equals(currentApprover.getId())) found = true;
+            if (line.getType() != ApprovalLineType.APPROVE
+                    && line.getType() != ApprovalLineType.CONSENT) {
                 continue;
             }
+
+            if (!found) {
+                if (line.getAccount().getId().equals(currentApprover.getId())) {
+                    found = true;
+                }
+                continue;
+            }
+
             return line.getAccount();
         }
+
         return null;
     }
 
     private ApprovalSummaryResponse toSummaryDto(Approval approval) {
         ApprovalStatus status = approval.getStatus();
+
         String approvedBy = null, approvedReason = null;
         String rejectedBy = null, rejectedReason = null;
         String canceledBy = null, canceledReason = null;
+
         LocalDateTime approvedAt = null;
         LocalDateTime rejectedAt = null;
         LocalDateTime canceledAt = null;
+
         if (status == ApprovalStatus.APPROVED) {
             ApprovalLine line = approval.getApprovalLines().stream()
                     .filter(l -> Boolean.TRUE.equals(l.getIsApproved()))
-                    .max(Comparator.comparing(ApprovalLine::getApprovedAt, Comparator.nullsLast(Comparator.naturalOrder())))
+                    .max(Comparator.comparing(ApprovalLine::getApprovedAt,
+                            Comparator.nullsLast(Comparator.naturalOrder())))
                     .orElse(null);
-            approvedBy = (line != null) ? line.getAccount().getName() : approval.getAccount().getName();
+
+            approvedBy = (line != null) ? line.getAccount().getName()
+                    : approval.getAccount().getName();
             approvedReason = (line != null) ? line.getComment() : null;
-            approvedAt = (line != null && line.getApprovedAt() != null) ? line.getApprovedAt() : approval.getApprovedAt();
+            approvedAt = (line != null && line.getApprovedAt() != null)
+                    ? line.getApprovedAt()
+                    : approval.getApprovedAt();
+
         } else if (status == ApprovalStatus.REJECTED) {
             ApprovalLine line = approval.getApprovalLines().stream()
                     .filter(l -> Boolean.FALSE.equals(l.getIsApproved()))
-                    .max(Comparator.comparing(ApprovalLine::getApprovedAt, Comparator.nullsLast(Comparator.naturalOrder())))
+                    .max(Comparator.comparing(ApprovalLine::getApprovedAt,
+                            Comparator.nullsLast(Comparator.naturalOrder())))
                     .orElse(null);
+
             rejectedBy = (line != null) ? line.getAccount().getName() : null;
             rejectedReason = (line != null) ? line.getComment() : null;
-            rejectedAt = (line != null && line.getApprovedAt() != null) ? line.getApprovedAt() : approval.getApprovedAt();
+            rejectedAt = (line != null && line.getApprovedAt() != null)
+                    ? line.getApprovedAt()
+                    : approval.getApprovedAt();
+
         } else if (status == ApprovalStatus.CANCELED) {
             canceledBy = approval.getAccount().getName();
             canceledReason = null;
             canceledAt = approval.getApprovedAt();
         }
+
         return ApprovalSummaryResponse.builder()
                 .id(approval.getId())
                 .title(approval.getTitle())
@@ -439,8 +511,16 @@ public class ApprovalServiceImpl implements ApprovalService {
                 .isApproved(approval.getIsApproved())
                 .drafterAccountId(approval.getAccount().getId())
                 .drafterName(approval.getAccount().getName())
-                .nextApproverAccountId(approval.getNextApprover() != null ? approval.getNextApprover().getId() : null)
-                .nextApproverName(approval.getNextApprover() != null ? approval.getNextApprover().getName() : null)
+                .nextApproverAccountId(
+                        approval.getNextApprover() != null
+                                ? approval.getNextApprover().getId()
+                                : null
+                )
+                .nextApproverName(
+                        approval.getNextApprover() != null
+                                ? approval.getNextApprover().getName()
+                                : null
+                )
                 .createdAt(approval.getCreatedAt())
                 .approvedAt(approvedAt)
                 .rejectedAt(rejectedAt)
@@ -457,9 +537,14 @@ public class ApprovalServiceImpl implements ApprovalService {
 
     private ApprovalDetailResponse toDetailDto(Approval approval, List<ApprovalLine> lines) {
         Account drafter = approval.getAccount();
+
         return ApprovalDetailResponse.builder()
                 .id(approval.getId())
-                .deploymentId(approval.getDeployment() != null ? approval.getDeployment().getId() : null)
+                .deploymentId(
+                        approval.getDeployment() != null
+                                ? approval.getDeployment().getId()
+                                : null
+                )
                 .drafterAccountId(drafter.getId())
                 .drafterName(drafter.getName())
                 .drafterDept(drafter.getDepartment().getKoreanName())
@@ -480,6 +565,7 @@ public class ApprovalServiceImpl implements ApprovalService {
                                     if (line.getIsApproved() == null) statusLabel = "대기";
                                     else if (line.getIsApproved()) statusLabel = "승인";
                                     else statusLabel = "반려";
+
                                     return ApprovalDetailResponse.ApprovalLineDto.builder()
                                             .id(line.getId())
                                             .accountId(line.getAccount().getId())
@@ -499,35 +585,59 @@ public class ApprovalServiceImpl implements ApprovalService {
 
     private void saveRelatedProjects(Deployment deployment, List<Long> relatedProjectIds) {
         Project base = deployment.getProject();
-        if (base == null) throw new IllegalStateException("Deployment has no base project.");
+        if (base == null) {
+            throw new IllegalStateException("Deployment has no base project.");
+        }
+
         relatedProjectRepository.deleteByProject(base);
-        if (relatedProjectIds == null || relatedProjectIds.isEmpty()) return;
-        List<Long> clean = relatedProjectIds.stream().filter(id -> id != null && !id.equals(base.getId())).distinct().collect(Collectors.toList());
+
+        if (relatedProjectIds == null || relatedProjectIds.isEmpty()) {
+            return;
+        }
+
+        List<Long> clean = relatedProjectIds.stream()
+                .filter(id -> id != null && !id.equals(base.getId()))
+                .distinct()
+                .collect(Collectors.toList());
+
         for (Long rpId : clean) {
-            Project related = projectRepository.findById(rpId).orElseThrow(() -> new IllegalArgumentException("Related project not found"));
+            Project related = projectRepository.findById(rpId)
+                    .orElseThrow(() -> new IllegalArgumentException("Related project not found"));
+
             if (!relatedProjectRepository.existsByProjectAndRelatedProject(base, related)) {
-                RelatedProject link = RelatedProject.builder().project(base).relatedProject(related).build();
+                RelatedProject link = RelatedProject.builder()
+                        .project(base)
+                        .relatedProject(related)
+                        .build();
                 relatedProjectRepository.save(link);
             }
         }
     }
 
     private boolean isLinesChanged(Approval approval, ApprovalUpdateRequest req) {
-        List<ApprovalLine> oldLines = approval.getApprovalLines().stream().sorted(Comparator.comparing(ApprovalLine::getId)).collect(Collectors.toList());
+        List<ApprovalLine> oldLines = approval.getApprovalLines().stream()
+                .sorted(Comparator.comparing(ApprovalLine::getId))
+                .collect(Collectors.toList());
+
         List<ApprovalUpdateRequest.ApprovalLineRequest> newLines = req.getLines();
         if (newLines == null) return false;
         if (oldLines.size() != newLines.size()) return true;
+
         for (int i = 0; i < oldLines.size(); i++) {
             ApprovalLine o = oldLines.get(i);
             ApprovalUpdateRequest.ApprovalLineRequest n = newLines.get(i);
+
             Long oAcc = (o.getAccount() != null) ? o.getAccount().getId() : null;
             Long nAcc = n.getAccountId();
+
             if (!safeEq(oAcc, nAcc)) return true;
             if (!safeEq(o.getType(), n.getType())) return true;
+
             String oc = (o.getComment() == null) ? "" : o.getComment();
             String nc = (n.getComment() == null) ? "" : n.getComment();
             if (!oc.equals(nc)) return true;
         }
+
         return false;
     }
 
@@ -537,9 +647,13 @@ public class ApprovalServiceImpl implements ApprovalService {
 
     private void replaceLinesFromUpdate(Approval approval, List<ApprovalUpdateRequest.ApprovalLineRequest> lineReqs) {
         if (lineReqs == null || lineReqs.isEmpty()) return;
+
         for (ApprovalUpdateRequest.ApprovalLineRequest lr : lineReqs) {
             if (lr.getAccountId() == null) continue;
-            Account account = accountRepository.findById(lr.getAccountId()).orElseThrow(() -> new IllegalArgumentException("Account not found."));
+
+            Account account = accountRepository.findById(lr.getAccountId())
+                    .orElseThrow(() -> new IllegalArgumentException("Account not found."));
+
             ApprovalLine line = ApprovalLine.builder()
                     .approval(approval)
                     .account(account)
@@ -548,76 +662,51 @@ public class ApprovalServiceImpl implements ApprovalService {
                     .approvedAt(null)
                     .isApproved(null)
                     .build();
+
             approval.addApprovalLine(line);
         }
     }
 
-    private static class ScheduleRange {
-        final LocalDateTime start;
-        final LocalDateTime end;
-        final long minutes;
-        ScheduleRange(LocalDateTime s, LocalDateTime e) { this.start = s; this.end = e; this.minutes = Duration.between(s, e).toMinutes(); }
+    private static boolean isNotBlank(String s) {
+        return s != null && !s.isBlank();
     }
-
-    private Optional<ScheduleRange> parseScheduleFromContent(String content) {
-        if (content == null || content.isBlank()) return Optional.empty();
-        String text = content
-                .replaceAll("(?is)<style[^>]*>.*?</style>", " ")
-                .replaceAll("(?is)<script[^>]*>.*?</script>", " ")
-                .replaceAll("(?is)<[^>]+>", " ")
-                .replace("&nbsp;", " ")
-                .replace("&ensp;", " ")
-                .replace("&emsp;", " ")
-                .replace("&ndash;", "-")
-                .replace("&minus;", "-")
-                .replace("&mdash;", "-")
-                .trim();
-        text = text.replaceAll("\\s+", " ");
-        Pattern p = Pattern.compile("(20\\d{2}-\\d{2}-\\d{2})\\s+(\\d{2}:\\d{2})\\s*[~\\-–—]\\s*(20\\d{2}-\\d{2}-\\d{2})\\s+(\\d{2}:\\d{2})");
-        Matcher m = p.matcher(text);
-        if (!m.find()) return Optional.empty();
-        String d1 = m.group(1) + " " + m.group(2);
-        String d2 = m.group(3) + " " + m.group(4);
-        DateTimeFormatter F = DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm").withResolverStyle(ResolverStyle.STRICT);
-        try {
-            LocalDateTime start = LocalDateTime.parse(d1, F);
-            LocalDateTime end = LocalDateTime.parse(d2, F);
-            if (end.isBefore(start)) return Optional.empty();
-            return Optional.of(new ScheduleRange(start, end));
-        } catch (Exception e) {
-            log.debug("SCHEDULE_PARSE_FAILED {}", e.getMessage());
-            return Optional.empty();
-        }
-    }
-
-    private static boolean isNotBlank(String s) { return s != null && !s.isBlank(); }
 
     @SafeVarargs
     private static <T> T firstNonNull(T... vals) {
         for (T v : vals) if (v != null) return v;
         return null;
     }
+
     private static String firstNonBlank(String... vals) {
         for (String v : vals) if (isNotBlank(v)) return v;
         return null;
     }
+
     private static <T> T safe(java.util.concurrent.Callable<T> c) {
-        try { return c.call(); } catch (Exception e) { return null; }
+        try {
+            return c.call();
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private String[] parseOwnerRepo(String repoUrl) {
         if (!isNotBlank(repoUrl)) return new String[]{null, null};
+
         String s = repoUrl.replace(".git", "");
+
         int i = s.indexOf("github.com/");
         if (i >= 0) {
             String[] parts = s.substring(i + "github.com/".length()).split("/");
             if (parts.length >= 2) return new String[]{parts[0], parts[1]};
         }
+
         i = s.indexOf("github.com:");
         if (i >= 0) {
             String[] parts = s.substring(i + "github.com:".length()).split("/");
             if (parts.length >= 2) return new String[]{parts[0], parts[1]};
         }
+
         return new String[]{null, null};
     }
 
@@ -643,5 +732,25 @@ public class ApprovalServiceImpl implements ApprovalService {
                 }, () -> {
                     log.info("REPORT_SYNC skipped: no COMPLETED deployment for prId={}", prId);
                 });
+    }
+
+    /**
+     * 프론트에서 들어온 scheduledAt / scheduledToEndedAt 을 Deployment 에 반영
+     * (DB 컬럼: scheduled_at, scheduled_to_ended_at)
+     */
+    private void applyScheduleFromRequest(Deployment deployment, ApprovalCreateRequest request) {
+        if (deployment == null || request == null) return;
+
+        LocalDateTime start = request.getScheduledAt();
+        LocalDateTime end   = request.getScheduledToEndedAt();
+
+        if (start == null && end == null) return;
+
+        if (start != null && end != null && end.isBefore(start)) {
+            log.warn("Invalid schedule in ApprovalCreateRequest: end < start. start={}, end={}", start, end);
+            return;
+        }
+
+        deployment.updateSchedule(start, end);
     }
 }
