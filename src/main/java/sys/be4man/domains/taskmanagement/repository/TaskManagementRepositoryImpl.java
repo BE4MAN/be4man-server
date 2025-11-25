@@ -135,6 +135,12 @@ public class TaskManagementRepositoryImpl implements TaskManagementRepositoryCus
      *    - PENDING(승인대기): 승인 대기 중
      *    - REJECTED(반려): 누구 한 명이라도 반려 시 모든 승인자의 내역에 표시
      *    - APPROVED(완료): 모든 승인 완료
+     *
+     * 4. 재배포 단계:
+     *    - 재배포 작업 전체 (RETRY Stage)
+     *
+     * 5. 복구 단계:
+     *    - 복구 작업 전체 (ROLLBACK Stage)
      */
     private BooleanBuilder buildStageCondition(String stage) {
         BooleanBuilder builder = new BooleanBuilder();
@@ -144,12 +150,8 @@ public class TaskManagementRepositoryImpl implements TaskManagementRepositoryCus
             builder.and(deployment.stage.eq(DeploymentStage.PLAN));
 
         } else if ("배포".equals(stage)) {
-            // 배포는 배포중, 종료, 취소 표시
-            builder.and(deployment.stage.in(
-                            DeploymentStage.DEPLOYMENT,
-                            DeploymentStage.RETRY,
-                            DeploymentStage.ROLLBACK
-                    ))
+            // 배포는 DEPLOYMENT 단계만 (배포중, 종료, 취소 표시)
+            builder.and(deployment.stage.eq(DeploymentStage.DEPLOYMENT))
                     .and(deployment.status.in(
                             DeploymentStatus.IN_PROGRESS,
                             DeploymentStatus.COMPLETED,
@@ -165,6 +167,14 @@ public class TaskManagementRepositoryImpl implements TaskManagementRepositoryCus
                             DeploymentStatus.APPROVED,
                             DeploymentStatus.COMPLETED
                     ));
+
+        } else if ("재배포".equals(stage)) {
+            // ✅ 재배포는 RETRY 단계 전체 표시
+            builder.and(deployment.stage.eq(DeploymentStage.RETRY));
+
+        } else if ("복구".equals(stage)) {
+            // ✅ 복구는 ROLLBACK 단계 전체 표시
+            builder.and(deployment.stage.eq(DeploymentStage.ROLLBACK));
         }
 
         return builder;

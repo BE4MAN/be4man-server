@@ -32,7 +32,7 @@ public class TaskManagementController {
      * GET /api/tasks
      *
      * @param searchQuery 검색어 (작업번호, 기안자, 서비스명)
-     * @param stage 처리 단계 (전체/계획서/배포/결과보고)
+     * @param stage 처리 단계 (전체/계획서/배포/결과보고/재배포/복구)
      * @param status 처리 상태 (전체/승인대기/진행중/취소/종료/완료)
      * @param result 결과 (전체/성공/실패)
      * @param startDate 시작일 (YYYY-MM-DD)
