@@ -18,7 +18,7 @@ public class TaskManagementSearchDto {
     // 검색 조건
     private String searchQuery;             // 작업번호, 기안자, 서비스명 검색
     // 필터 조건
-    private String stage;                   // 처리 단계 (전체/계획서/배포/결과보고)
+    private String stage;                   // 처리 단계 (전체/계획서/배포/결과보고/재배포/복구)
     private String status;                  // 처리 상태 (전체/승인대기/반려/진행중/취소/완료)
     private String result;                  // 결과 (전체/성공/실패)
     // 날짜 범위
