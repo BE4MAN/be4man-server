@@ -1,3 +1,4 @@
+// 작성자 : 허겸, 이원석
 package sys.be4man.domains.approval.model.entity;
 
 import jakarta.persistence.*;

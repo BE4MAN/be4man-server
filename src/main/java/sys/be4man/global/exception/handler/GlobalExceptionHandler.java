@@ -1,3 +1,4 @@
+// 작성자 : 이원석
 package sys.be4man.global.exception.handler;
 
 import jakarta.servlet.http.HttpServletRequest;

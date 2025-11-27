@@ -1,3 +1,4 @@
+// 작성자 : 허겸, 김민호
 package sys.be4man.domains.deployment.model.type;
 
 import lombok.Getter;

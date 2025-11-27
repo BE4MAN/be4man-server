@@ -1,3 +1,4 @@
+// 작성자 : 조윤상
 package sys.be4man.domains.analysis.service.llm;
 
 import com.fasterxml.jackson.databind.ObjectMapper;

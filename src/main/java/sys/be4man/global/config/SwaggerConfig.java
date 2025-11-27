@@ -1,3 +1,4 @@
+// 작성자 : 이원석
 package sys.be4man.global.config;
 
 import io.swagger.v3.oas.models.Components;

@@ -1,3 +1,4 @@
+// 작성자 : 이원석
 package sys.be4man.domains.ban.repository;
 
 import static sys.be4man.domains.ban.model.entity.QBan.ban;

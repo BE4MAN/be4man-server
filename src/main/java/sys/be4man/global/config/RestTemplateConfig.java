@@ -1,3 +1,4 @@
+// 작성자 : 조윤상
 package sys.be4man.global.config;
 
 import org.springframework.context.annotation.Bean;

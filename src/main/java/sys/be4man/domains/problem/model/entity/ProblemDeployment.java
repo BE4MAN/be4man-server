@@ -1,3 +1,4 @@
+// 작성자 : 김민호
 package sys.be4man.domains.problem.model.entity;
 
 import jakarta.persistence.*;

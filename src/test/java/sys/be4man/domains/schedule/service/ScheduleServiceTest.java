@@ -1,3 +1,4 @@
+// 작성자 : 이원석
 package sys.be4man.domains.schedule.service;
 
 import static org.assertj.core.api.Assertions.assertThat;

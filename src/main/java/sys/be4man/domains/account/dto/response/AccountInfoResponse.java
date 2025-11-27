@@ -1,3 +1,4 @@
+// 작성자 : 김민호, 이원석
 package sys.be4man.domains.account.dto.response;
 
 import sys.be4man.domains.account.model.entity.Account;

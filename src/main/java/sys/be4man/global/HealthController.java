@@ -1,3 +1,4 @@
+// 작성자 : 이원석
 package sys.be4man.global;
 
 import org.springframework.beans.factory.annotation.Value;
